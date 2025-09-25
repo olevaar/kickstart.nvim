@@ -18,7 +18,7 @@ Grab the latest version of Neovim from the [Neovim Releases Page](https://github
 External Requirements:
 - Basic utils: `git`, `make`, `unzip`, C Compiler (`gcc`)
 - [ripgrep](https://github.com/BurntSushi/ripgrep#installation), (optional, but highly recommended)
-  [fd-find](https://github.com/sharkdp/fd#installation) (optional, but highly recommended)
+- [fd-find](https://github.com/sharkdp/fd#installation) (optional, but highly recommended)
 - Clipboard tool (xclip/xsel/win32yank or other depending on the platform)
 - A [Nerd Font](https://www.nerdfonts.com/): optional, provides various icons
   - if you have it set `vim.g.have_nerd_font` in `init.lua` to true
@@ -145,3 +145,12 @@ You now have two options to install the plugins and LSP servers.
 chmod +x install.sh 
 ./install.sh
 ```
+
+#### Avante.nvim and Github Copilot configuration
+In this config Avante.nvim is setup to work with Github Copilot and Google Gemini. You can change these providers if you want (to for example Anthropic or OpenAI), or disable these plugins entirely. 
+
+Google Gemini requires an API key to work. You can get one from https://developers.generativeai.google. Once you have the key, you can set it in your environment variables as `GOOGLE_API_KEY`.
+
+Github Copilot requires you to be signed in to your Github account. You can do this by running `:Copilot auth` in Neovim. This will open a browser window where you can sign in to your account. Once you are signed in, you can start using Copilot.
+
+The default keybinding for using Avante.nvim is <leader>an for a new chat and <leader>ar to repeat the last chat. You can change these keybindings in the `lua/plugins/avante.lua` file. <leader>ap is used to toggle between providers.
