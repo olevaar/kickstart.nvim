@@ -20,6 +20,7 @@ return { -- Autocompletion
   opts = {
     keymap = {
       preset = 'default',
+      ['<CR>'] = { 'select_and_accept', 'fallback' },
       ['<C-j>'] = false,
       ['<C-k>'] = false,
       ['<C-n>'] = { 'select_next' },
