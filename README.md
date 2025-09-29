@@ -153,4 +153,4 @@ Google Gemini requires an API key to work. You can get one from https://develope
 
 Github Copilot requires you to be signed in to your Github account. You can do this by running `:Copilot auth` in Neovim. This will open a browser window where you can sign in to your account. Once you are signed in, you can start using Copilot.
 
-The default keybinding for using Avante.nvim is <leader>an for a new chat and <leader>ar to repeat the last chat. You can change these keybindings in the `lua/plugins/avante.lua` file. <leader>ap is used to toggle between providers.
+The default keybinding for using Avante.nvim is ```<leader>an``` for a new chat and ```<leader>aa``` to open the last chat. You can change these keybindings in the `lua/plugins/avante.lua` file. ```<leader>ap``` is used to toggle between providers.
