@@ -26,6 +26,13 @@ vim.keymap.set('n', '<C-l>', '<C-w><C-l>', { desc = 'Move focus to the right win
 vim.keymap.set('n', '<C-j>', '<C-w><C-j>', { desc = 'Move focus to the lower window' })
 vim.keymap.set('n', '<C-k>', '<C-w><C-k>', { desc = 'Move focus to the upper window' })
 
+vim.diagnostic.config {
+  virtual_text = {
+    wrap = true,
+    spacing = 4,
+  },
+}
+
 -- Load custom mappings
 for _, keymap in ipairs(require('custom.mappings').keymaps) do
   vim.keymap.set(unpack(keymap))
