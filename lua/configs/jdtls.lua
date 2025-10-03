@@ -1,63 +1,67 @@
+-- Configuration details for jdtls
+
 local M = {}
-local data_dir = vim.fn.stdpath 'data'
-local jdtls_base = data_dir .. '/mason/packages/jdtls'
-local lombok_jar = data_dir .. '/jdtls/lombok.jar'
-local function workspace_dir()
-  local project_name = vim.fn.fnamemodify(vim.fn.getcwd(), ':p:h:t')
-  local ws = data_dir .. '/jdtls-workspace/' .. project_name
-  vim.fn.mkdir(ws, 'p')
-  return ws
-end
-M.cmd = function()
-  local launcher = vim.fn.glob(jdtls_base .. '/plugins/org.eclipse.equinox.launcher_*.jar')
-  local config_dir = (vim.loop.os_uname().sysname == 'Darwin') and (jdtls_base .. '/config_mac')
-    or (vim.fn.has 'win32' == 1) and (jdtls_base .. '/config_win')
-    or (jdtls_base .. '/config_linux')
-  return {
-    'java',
+
+-- Detect project root
+local root_markers = { 'mvnw', 'gradlew', 'pom.xml', 'build.gradle', '.git' }
+local root_dir = require('jdtls.setup').find_root(root_markers) or vim.loop.cwd()
+local project_name = vim.fn.fnamemodify(root_dir, ':t')
+
+-- JDK to run jdtls (adjust if needed)
+local java_home = os.getenv 'JAVA_HOME' or '/usr/lib/jvm/java-21-openjdk-amd64'
+local java_bin = java_home .. '/bin/java'
+
+-- Mason jdtls layout
+local mason = vim.fn.stdpath 'data' .. '/mason'
+local jdtls_base = mason .. '/packages/jdtls'
+local lombok_jar = jdtls_base .. '/lombok.jar'
+local launcher_jar = vim.fn.glob(jdtls_base .. '/plugins/org.eclipse.equinox.launcher_*.jar')
+local config_dir = jdtls_base .. '/config_linux' -- use _mac or _win if relevant
+local workspace = vim.fn.stdpath 'state' .. '/jdtls-workspaces/' .. project_name
+
+-- Debug bundle (only this one; keep it minimal)
+local debug_bundle = vim.fn.globpath(mason .. '/share/java-debug-adapter', 'com.microsoft.java.debug.plugin-*.jar', true, true)
+
+M.config = {
+  cmd = {
+    java_bin,
     '-Declipse.application=org.eclipse.jdt.ls.core.id1',
     '-Dosgi.bundles.defaultStartLevel=4',
     '-Declipse.product=org.eclipse.jdt.ls.core.product',
-    '-Dlog.protocol=true',
+    '-Dlog.protocol=false',
     '-Dlog.level=ALL',
-    '-javaagent:' .. lombok_jar,
-    '-Xbootclasspath/a:' .. lombok_jar,
+    '-Xms1g',
+    '--add-modules=ALL-SYSTEM',
+    '--add-opens',
+    'java.base/java.util=ALL-UNNAMED',
+    '--add-opens',
+    'java.base/java.lang=ALL-UNNAMED',
     '-jar',
-    launcher,
+    launcher_jar,
     '-configuration',
     config_dir,
     '-data',
-    workspace_dir(),
-  }
-end
-M.settings = {
-  java = {
-    configuration = { updateBuildConfiguration = 'interactive' },
-    completion = {
-      favoriteStaticMembers = {
-        'org.mockito.Mockito.*',
-        'org.hamcrest.MatcherAssert.*',
-        'org.hamcrest.Matchers.*',
-        'org.assertj.core.api.Assertions.*',
-      },
-    },
-    contentProvider = { preferred = 'fernflower' },
-    eclipse = { downloadSources = true },
-    maven = { downloadSources = true },
-    implementationsCodeLens = { enabled = true },
-    referencesCodeLens = { enabled = true },
-    references = { includeDecompiledSources = true },
-    format = { enabled = true },
+    workspace,
   },
+  root_dir = root_dir,
+  settings = {
+    java = {
+      import = {
+        maven = {
+          enabled = true,
+          userSettings = root_dir .. '.mvn/settings.xml',
+        },
+      },
+      project = {
+        referencedLibraries = {
+          root_dir .. '/.m2-local/**/*.jar',
+        },
+      },
+      signatureHelp = { enabled = true },
+    },
+  },
+  init_options = { bundles = debug_bundle },
 }
-M.on_attach = function(_, bufnr)
-  local jdtls = require 'jdtls'
-  jdtls.setup_dap { hotcodereplace = 'auto' }
-  jdtls.setup.add_commands()
-  local map = vim.keymap.set
-  local opts = { buffer = bufnr, noremap = true, silent = true }
-  map('n', '<leader>oi', jdtls.organize_imports, opts)
-  map('n', '<leader>ev', jdtls.extract_variable, opts)
-  map('v', '<leader>em', jdtls.extract_method, opts)
-end
+
 return M
+
