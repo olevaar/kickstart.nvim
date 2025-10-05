@@ -29,7 +29,7 @@ External Requirements:
   - etc.
 
 
-For the included LSPs, you need: **node**, **npm**, **Java JDK ≥ 17**
+For the included LSPs, you need: **node ≥ 22** , **npm**, **Java JDK ≥ 21**
 
 #### Ubuntu / Debian (apt)
 
@@ -76,7 +76,7 @@ brew install git curl ripgrep fd temurin
 
 ---
 
-### Install Node.js with `fnm` (Node ≥ 18; recommended 20 LTS)
+### Install Node.js with `fnm` (Node ≥ 22)
 
 #### Install `fnm`
 
