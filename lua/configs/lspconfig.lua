@@ -110,13 +110,14 @@ require('mason-lspconfig').setup {
     function(server_name)
       local server = servers[server_name] or {}
       server.capabilities = vim.tbl_deep_extend('force', {}, capabilities, server.capabilities or {})
-      require('lspconfig')[server_name].setup(server)
+      vim.lsp.config(server_name, server)
     end,
   },
 }
 
 -- Manually configure the official Kotlin Language Server
-require('lspconfig').kotlin_language_server.setup {
-  cmd = { os.getenv('HOME') .. '/bin/kotlin-lsp.sh' },
+vim.lsp.config('kotlin_language_server', {
+  cmd = { os.getenv 'HOME' .. '/bin/kotlin-lsp.sh' },
   filetypes = { 'kotlin', 'kts' },
-}
+})
+
