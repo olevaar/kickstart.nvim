@@ -82,7 +82,6 @@ vim.diagnostic.config {
 
 local capabilities = require('blink.cmp').get_lsp_capabilities()
 local servers = {
-
   lua_ls = {
     settings = {
       Lua = {
@@ -100,6 +99,7 @@ vim.list_extend(ensure_installed, {
   'html',
   'ts_ls',
   'angularls',
+  'ktlint',
 })
 require('mason-tool-installer').setup { ensure_installed = ensure_installed }
 
@@ -110,8 +110,14 @@ require('mason-lspconfig').setup {
     function(server_name)
       local server = servers[server_name] or {}
       server.capabilities = vim.tbl_deep_extend('force', {}, capabilities, server.capabilities or {})
-      require('lspconfig')[server_name].setup(server)
+      vim.lsp.config(server_name, server)
     end,
   },
 }
+
+-- Manually configure the official Kotlin Language Server
+vim.lsp.config('kotlin_language_server', {
+  cmd = { os.getenv 'HOME' .. '/bin/kotlin-lsp.sh' },
+  filetypes = { 'kotlin', 'kts' },
+})
 

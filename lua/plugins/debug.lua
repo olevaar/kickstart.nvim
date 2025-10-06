@@ -9,6 +9,7 @@ return {
     'jay-babu/mason-nvim-dap.nvim',
 
     'leoluz/nvim-dap-go',
+    'Mgenuit/nvim-dap-kotlin',
   },
   keys = {
     {
@@ -79,6 +80,7 @@ return {
 
       ensure_installed = {
         'delve',
+        'kotlin-debug-adapter',
       },
     }
 
@@ -108,5 +110,6 @@ return {
         detached = vim.fn.has 'win32' == 0,
       },
     }
+    require('dap-kotlin').setup()
   end,
 }
