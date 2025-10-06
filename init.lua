@@ -33,7 +33,6 @@ vim.diagnostic.config {
   },
 }
 
--- Load custom mappings
 for _, keymap in ipairs(require('custom.mappings').keymaps) do
   vim.keymap.set(unpack(keymap))
 end

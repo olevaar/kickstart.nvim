@@ -6,8 +6,8 @@ return {
   opts = {
     providers = {
       ['gemini-cli'] = {
-        command = 'gemini', -- installed by @google/gemini-cli
-        args = { '--experimental-acp' }, -- ACP mode
+        command = 'gemini',
+        args = { '--experimental-acp' },
         env = {
           NODE_NO_WARNINGS = '1',
           GEMINI_API_KEY = os.getenv 'GEMINI_API_KEY',
@@ -15,7 +15,6 @@ return {
       },
       copilot = {},
     },
-    -- optional niceties
     behaviour = { auto_suggestions = false },
     mappings = { auto_set_keymaps = true },
   },

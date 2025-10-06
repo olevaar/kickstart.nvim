@@ -9,8 +9,7 @@ return {
     end,
     opts = {
       options = {
-        mode = 'buffers', -- or "tabs"
-        -- …any other bufferline options…
+        mode = 'buffers',
       },
     },
     keys = {
