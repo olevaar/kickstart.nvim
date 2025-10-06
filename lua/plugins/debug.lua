@@ -9,7 +9,9 @@ return {
     'jay-babu/mason-nvim-dap.nvim',
 
     'leoluz/nvim-dap-go',
-    'Mgenuit/nvim-dap-kotlin',
+
+    -- Load dap-kotlin only for Kotlin buffers (prevents early setup on VimEnter/LspAttach)
+    { 'Mgenuit/nvim-dap-kotlin', ft = 'kotlin' },
   },
   keys = {
     {
@@ -41,7 +43,7 @@ return {
       desc = 'Debug: Step Out',
     },
     {
-      '<leader>b',
+      '<leader>b>',
       function()
         require('dap').toggle_breakpoint()
       end,
@@ -75,9 +77,7 @@ return {
 
     require('mason-nvim-dap').setup {
       automatic_installation = true,
-
       handlers = {},
-
       ensure_installed = {
         'delve',
         'kotlin-debug-adapter',
@@ -110,6 +110,22 @@ return {
         detached = vim.fn.has 'win32' == 0,
       },
     }
-    require('dap-kotlin').setup()
+
+    -- 👉 Kotlin: set up only when a Kotlin buffer opens
+    vim.api.nvim_create_autocmd('FileType', {
+      pattern = 'kotlin',
+      callback = function()
+        local ok, dap_kotlin = pcall(require, 'dap-kotlin')
+        if not ok then
+          return
+        end
+        -- Ensure the configurations table exists to avoid pairs(nil)
+        dap.configurations.kotlin = dap.configurations.kotlin or {}
+        dap_kotlin.setup {
+          dap = dap, -- pass dap explicitly (dap-kotlin will use it if provided)
+          -- put your dap-kotlin opts here if you have any
+        }
+      end,
+    })
   end,
 }
