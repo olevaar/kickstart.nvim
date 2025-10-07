@@ -6,7 +6,6 @@ local java21 = os.getenv 'JAVA_HOME_21' or '/usr/lib/jvm/java-21-openjdk-amd64'
 
 dap.configurations.java = dap.configurations.java or {}
 
--- Existing configuration
 table.insert(dap.configurations.java, {
   type = 'java',
   request = 'launch',
@@ -18,7 +17,6 @@ table.insert(dap.configurations.java, {
   javaExec = java11 .. '/bin/java',
 })
 
--- Generic configuration using the current file as Main Class
 table.insert(dap.configurations.java, {
   type = 'java',
   request = 'launch',
