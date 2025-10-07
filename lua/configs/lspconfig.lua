@@ -100,6 +100,7 @@ vim.list_extend(ensure_installed, {
   'ts_ls',
   'angularls',
   'ktlint',
+  'shfmt',
 })
 require('mason-tool-installer').setup { ensure_installed = ensure_installed }
 
@@ -120,4 +121,3 @@ vim.lsp.config('kotlin_language_server', {
   cmd = { os.getenv 'HOME' .. '/bin/kotlin-lsp.sh' },
   filetypes = { 'kotlin', 'kts' },
 })
-

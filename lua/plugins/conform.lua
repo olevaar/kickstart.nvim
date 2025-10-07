@@ -28,6 +28,8 @@ return {
     formatters_by_ft = {
       kotlin = { 'ktlint' },
       lua = { 'stylua' },
+      bash = { 'shfmt' },
+      sh = { 'shfmt' },
     },
   },
 }
