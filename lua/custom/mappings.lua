@@ -7,7 +7,12 @@ M.keymaps = {
   { 'i', '<C-k>', '<Up>', { desc = 'Move up' } },
   { 'i', '<C-b>', '<Home>', { desc = 'Beginning of line' } },
   { 'i', '<C-e>', '<End>', { desc = 'End of line' } },
+  { 'n', '<Esc>', '<cmd>nohlsearch<CR>' },
+  { 'n', '<leader>q', vim.diagnostic.setloclist, { desc = 'Open diagnostic [Q]uickfix list' } },
+  { 'n', '<C-h>', '<C-w><C-h>', { desc = 'Move focus to the left window' } },
+  { 'n', '<C-l>', '<C-w><C-l>', { desc = 'Move focus to the right window' } },
+  { 'n', '<C-j>', '<C-w><C-j>', { desc = 'Move focus to the lower window' } },
+  { 'n', '<C-k>', '<C-w><C-k>', { desc = 'Move focus to the upper window' } },
 }
-
 
 return M
