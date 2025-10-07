@@ -73,6 +73,12 @@ vim.api.nvim_create_autocmd({ 'VimEnter', 'DirChanged' }, {
   end,
 })
 
+vim.opt.tabstop = 4
+vim.opt.shiftwidth = 4
+vim.opt.expandtab = true
+vim.opt.smartindent = true
+vim.opt.softtabstop = 4
+
 local rtp = vim.opt.rtp
 rtp:prepend(lazypath)
 
