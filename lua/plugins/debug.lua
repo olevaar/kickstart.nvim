@@ -111,6 +111,8 @@ return {
       },
     }
 
+    pcall(require, 'debug.java')
+
     -- 👉 Kotlin: set up only when a Kotlin buffer opens
     vim.api.nvim_create_autocmd('FileType', {
       pattern = 'kotlin',
