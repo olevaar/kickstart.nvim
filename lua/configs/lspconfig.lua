@@ -101,6 +101,7 @@ vim.list_extend(ensure_installed, {
   'angularls',
   'ktlint',
   'shfmt',
+  'jdtls',
 })
 require('mason-tool-installer').setup { ensure_installed = ensure_installed }
 
