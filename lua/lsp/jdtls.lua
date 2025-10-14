@@ -3,7 +3,7 @@ local M = {}
 local started = {} ---@type table<string, boolean>
 
 local function find_root_from(dir)
-  local markers = { 'gradlew', 'mvnw', 'pom.xml', 'build.gradle', 'build.gradle.kts' }
+  local markers = { 'gradlew', 'mvnw', 'pom.xml', 'build.gradle', 'build.gradle.kts', '.git' }
   local found = vim.fs.find(markers, { upward = true, path = dir })[1]
   return found and vim.fs.dirname(found) or nil
 end
@@ -51,22 +51,12 @@ local function file_contains(path, needles)
 end
 
 local function buildfiles_indicate_kotlin(root)
-  local gradle_files = { root .. '/build.gradle', root .. '/build.gradle.kts' }
-  for _, p in ipairs(gradle_files) do
-    if file_contains(p, {
-      'kotlin(',
-      'org.jetbrains.kotlin',
-      'kotlin-android',
-      'kotlin-dsl',
-    }) then
+  for _, p in ipairs { root .. '/build.gradle', root .. '/build.gradle.kts' } do
+    if file_contains(p, { 'kotlin(', 'org.jetbrains.kotlin', 'kotlin-android', 'kotlin-dsl' }) then
       return true
     end
   end
-  local pom = root .. '/pom.xml'
-  if file_contains(pom, {
-    '<groupid>org.jetbrains.kotlin</groupid>',
-    'kotlin-maven-plugin',
-  }) then
+  if file_contains(root .. '/pom.xml', { '<groupid>org.jetbrains.kotlin</groupid>', 'kotlin-maven-plugin' }) then
     return true
   end
   return false
@@ -78,11 +68,27 @@ local function is_kotlin_only(root)
   return (not has_java) and has_kotlin
 end
 
+-- Collect debug/test bundles from Mason (safe if missing)
+local function collect_bundles()
+  local mr = vim.fn.stdpath 'data' .. '/mason/packages'
+  local dbg = mr .. '/java-debug-adapter/extension/server/com.microsoft.java.debug.plugin-*.jar'
+  local tst = mr .. '/java-test/extension/server/*.jar'
+  local bundles = {}
+  local function push(globpat)
+    local m = vim.fn.glob(globpat, true, true)
+    if type(m) == 'table' then
+      for _, x in ipairs(m) do
+        table.insert(bundles, x)
+      end
+    end
+  end
+  push(dbg)
+  push(tst)
+  return bundles
+end
+
 local function start_for_root(root, opts)
   opts = opts or {}
-  if started[root] then
-    return
-  end
   if opts.skip_kotlin_only ~= false and is_kotlin_only(root) then
     return
   end
@@ -99,9 +105,45 @@ local function start_for_root(root, opts)
     return
   end
 
+  -- Build config + always include debug/test bundles
   local cfg = build.build(root, opts.config_opts or {})
+  local bundles = collect_bundles()
+  cfg.init_options = cfg.init_options or {}
+  cfg.init_options.bundles = cfg.init_options.bundles or {}
+  vim.list_extend(cfg.init_options.bundles, bundles)
+
+  -- Start/attach LS
   jdtls.start_or_attach(cfg)
   started[root] = true
+
+  -- 🔌 Always register the DAP adapter (idempotent)
+  jdtls.setup_dap { hotcodereplace = 'auto' }
+
+  -- ✅ Only generate per-main-class configs when a jdtls client is attached for this root
+  local function jdtls_attached_for_root()
+    for _, c in ipairs(vim.lsp.get_clients { name = 'jdtls' }) do -- get_active_clients() is deprecated
+      if c.config and c.config.root_dir == root then
+        return true
+      end
+    end
+    return false
+  end
+
+  local function gen_main_class_configs()
+    pcall(function()
+      require('jdtls.dap').setup_dap_main_class_configs()
+    end)
+  end
+
+  if jdtls_attached_for_root() then
+    gen_main_class_configs()
+  else
+    vim.defer_fn(function()
+      if jdtls_attached_for_root() then
+        gen_main_class_configs()
+      end
+    end, 250)
+  end
 end
 
 function M.start_from_cwd(opts)
@@ -131,11 +173,7 @@ function M.start_for_current_buffer(opts)
     dir = vim.loop.cwd()
   else
     local stat = vim.uv.fs_stat(bufname)
-    if stat and stat.type == 'directory' then
-      dir = bufname
-    else
-      dir = vim.fs.dirname(bufname)
-    end
+    dir = (stat and stat.type == 'directory') and bufname or vim.fs.dirname(bufname)
   end
   if not dir then
     return

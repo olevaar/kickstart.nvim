@@ -68,11 +68,16 @@ vim.api.nvim_create_user_command('JavaMspRun', function()
 end, {})
 
 vim.api.nvim_create_user_command('JavaRun', function()
-  for _, c in ipairs(dap.configurations.java) do
-    if c.name == 'Debug (Launch) Current File' then
+  local dap = require 'dap'
+  if not dap.adapters.java then
+    vim.notify('Java DAP not initialized yet. Open a Java file so JDTLS can set it up.', vim.log.levels.WARN)
+    return
+  end
+  for _, c in ipairs(dap.configurations.java or {}) do
+    if c.request == 'launch' and c.mainClass then
       dap.run(c)
       return
     end
   end
-  vim.notify('Generic Java DAP config not found', vim.log.levels.ERROR)
+  vim.notify('No Java launch configs found. Try reopening the project, or run: :lua require("jdtls.dap").setup_dap_main_class_configs()', vim.log.levels.ERROR)
 end, {})

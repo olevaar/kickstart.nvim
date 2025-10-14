@@ -30,7 +30,7 @@ function M.build(root, opts)
   opts = opts or {}
   local LOMBOK_JAR = mason .. '/lombok.jar'
   local JDTLS_JAR = find_launcher()
-  local JDTLS_CONFIG = jdtls_config_dir()
+  local JDTLS_CFG = jdtls_config_dir()
 
   local cmd = {
     'java',
@@ -48,7 +48,7 @@ function M.build(root, opts)
     '-jar',
     JDTLS_JAR,
     '-configuration',
-    JDTLS_CONFIG,
+    JDTLS_CFG,
     '-data',
     workspace_dir(root),
   }
