@@ -20,10 +20,9 @@ return {
     config = function()
       require('telescope').setup {
         defaults = {
-          layout_config = {
-            prompt_position = 'top',
-          },
+          layout_strategy = 'center',
           sorting_strategy = 'ascending',
+          path_display = { 'smart' },
         },
         extensions = {
           ['ui-select'] = {
