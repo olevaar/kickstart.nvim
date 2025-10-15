@@ -3,7 +3,7 @@ local M = {}
 local started = {} ---@type table<string, boolean>
 
 local function find_root_from(dir)
-  local markers = { 'gradlew', 'mvnw', 'pom.xml', 'build.gradle', 'build.gradle.kts', '.git' }
+  local markers = { 'gradlew', 'mvnw', 'pom.xml', 'build.gradle', 'build.gradle.kts' }
   local found = vim.fs.find(markers, { upward = true, path = dir })[1]
   return found and vim.fs.dirname(found) or nil
 end
