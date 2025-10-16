@@ -15,6 +15,8 @@ Grab the latest version of Neovim from the [Neovim Releases Page](https://github
 
 ### Install External Dependencies
 
+> Note: You can skip installing all of this manually if you run the `install.sh` or `install.cmd` (for Windows) script at the end of this guide. It will install everything you need. However, I have only actually tested this on Ubuntu and Debian. I had Gemini duplicate it for other distros, as well as Windows and MacOS, but those installs are untested.
+
 External Requirements:
 - Basic utils: `git`, `make`, `unzip`, C Compiler (`gcc`)
 - [ripgrep](https://github.com/BurntSushi/ripgrep#installation), (optional, but highly recommended)
