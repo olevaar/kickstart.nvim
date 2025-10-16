@@ -10,7 +10,6 @@ return {
 
     'leoluz/nvim-dap-go',
 
-    -- Load dap-kotlin only for Kotlin buffers (prevents early setup on VimEnter/LspAttach)
     { 'Mgenuit/nvim-dap-kotlin', ft = 'kotlin' },
   },
   keys = {
@@ -111,7 +110,6 @@ return {
 
     pcall(require, 'debug.java')
 
-    -- 👉 Kotlin: set up only when a Kotlin buffer opens
     vim.api.nvim_create_autocmd('FileType', {
       pattern = 'kotlin',
       callback = function()
@@ -119,11 +117,9 @@ return {
         if not ok then
           return
         end
-        -- Ensure the configurations table exists to avoid pairs(nil)
         dap.configurations.kotlin = dap.configurations.kotlin or {}
         dap_kotlin.setup {
-          dap = dap, -- pass dap explicitly (dap-kotlin will use it if provided)
-          -- put your dap-kotlin opts here if you have any
+          dap = dap,
         }
       end,
     })

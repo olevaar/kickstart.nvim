@@ -117,7 +117,6 @@ require('mason-lspconfig').setup {
   },
 }
 
--- Manually configure the official Kotlin Language Server
 vim.lsp.config('kotlin_language_server', {
   cmd = { os.getenv 'HOME' .. '/bin/kotlin-lsp.sh' },
   filetypes = { 'kotlin', 'kts' },
