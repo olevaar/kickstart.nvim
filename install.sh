@@ -322,6 +322,25 @@ install_clipboard_tools() {
   print_success "Clipboard tools installed."
 }
 
+install_fuse() {
+  if [ "$OS" != "linux" ]; then
+    print_info "Not running on Linux. Skipping fuse installation."
+    return 0
+  fi
+
+  print_info "Installing fuse (for AppImage support)..."
+  if command_exists apt-get; then
+    sudo apt-get install -y fuse
+  elif command_exists dnf; then
+    sudo dnf install -y fuse
+  elif command_exists pacman; then
+    sudo pacman -S --noconfirm fuse2
+  else
+    print_warning "Could not install fuse automatically. Please install it manually if you intend to use AppImages."
+  fi
+  print_success "Fuse installed."
+}
+
 install_nvim_packages() {
   print_info "Installing Neovim plugins and Mason packages..."
   nvim --headless "+Lazy! sync" +qa
@@ -374,6 +393,7 @@ main() {
   install_kotlin_lsp
   install_ripgrep_fd
   install_nerd_font
+  install_fuse
   install_neovim
   install_win32yank
   install_clipboard_tools
