@@ -7,42 +7,65 @@
 set -e # Exit immediately if a command exits with a non-zero status.
 export DEBIAN_FRONTEND=noninteractive
 
+# --- Global Variables ---
+OS=""
+
 # --- Helper Functions ---
 print_info() {
-    echo -e "\033[34m[INFO]\033[0m $1"
+    echo -e "\033[34m[INFO]\033[0m "
 }
 
 print_success() {
-    echo -e "\033[32m[SUCCESS]\033[0m $1"
+    echo -e "\033[32m[SUCCESS]\033[0m "
 }
 
 print_warning() {
-    echo -e "\033[33m[WARNING]\033[0m $1"
+    echo -e "\033[33m[WARNING]\033[0m "
 }
 
 print_error() {
-    echo -e "\033[31m[ERROR]\033[0m $1"
+    echo -e "\033[31m[ERROR]\033[0m "
     exit 1
 }
 
 command_exists() {
-    command -v "$1" &>/dev/null
+    command -v "" &>/dev/null
+}
+
+detect_os() {
+    print_info "Detecting operating system..."
+    case "$(uname -s)" in
+        Linux*)     OS="linux";;
+        Darwin*)    OS="macos";;
+        *)          print_error "Unsupported operating system: $(uname -s)";;
+    esac
+    print_success "Operating system detected: $OS"
 }
 
 # --- Installation Functions ---
 
 install_system_packages() {
-    print_info "Installing essential system packages (curl, git, build-essential, unzip)..."
-    if command_exists apt-get; then
-        sudo apt-get update
-        sudo apt-get install -y curl git build-essential unzip
-    elif command_exists dnf; then
-        sudo dnf install -y curl git gcc-c++ make unzip
-    elif command_exists pacman; then
-        sudo pacman -Syu --noconfirm curl git base-devel unzip
-    else
-        print_error "Unsupported package manager. Please install curl, git, build-essential, and unzip manually."
-    fi
+    print_info "Installing essential system packages..."
+    case "$OS" in
+        "linux")
+            if command_exists apt-get; then
+                sudo apt-get update
+                sudo apt-get install -y curl git build-essential unzip
+            elif command_exists dnf; then
+                sudo dnf install -y curl git gcc-c++ make unzip
+            elif command_exists pacman; then
+                sudo pacman -Syu --noconfirm curl git base-devel unzip
+            else
+                print_error "Unsupported Linux package manager. Please install curl, git, build-essential, and unzip manually."
+            fi
+            ;;
+        "macos")
+            if ! command_exists brew; then
+                print_error "Homebrew not found. Please install Homebrew first: https://brew.sh/"
+            fi
+            brew install curl git unzip make
+            ;;
+    esac
     print_success "Essential system packages installed."
 }
 
@@ -50,7 +73,7 @@ install_fnm_and_node() {
     print_info "Installing fnm and Node.js v22..."
     if ! command_exists fnm; then
         curl -fsSL https://fnm.vercel.app/install | bash -s -- --skip-shell
-        export PATH="/home/$USER/.local/share/fnm:$PATH"
+        export PATH="$HOME/.local/share/fnm:$PATH"
         eval "$(fnm env)"
         print_success "fnm installed."
     else
@@ -73,13 +96,24 @@ install_npm_packages() {
 
 install_java_sdks() {
     print_info "Installing OpenJDK versions..."
-    if command_exists apt-get; then
-        sudo apt-get update
-        sudo apt-get install -y openjdk-11-jdk openjdk-17-jdk openjdk-21-jdk
-        print_success "OpenJDK 11, 17, and 21 installed."
-    else
-        print_warning "apt-get not found. Skipping OpenJDK installation. Please install them manually."
-    fi
+    case "$OS" in
+        "linux")
+            if command_exists apt-get; then
+                sudo apt-get update
+                sudo apt-get install -y openjdk-11-jdk openjdk-17-jdk openjdk-21-jdk
+                print_success "OpenJDK 11, 17, and 21 installed."
+            else
+                print_warning "apt-get not found. Skipping OpenJDK installation. Please install them manually."
+            fi
+            ;;
+        "macos")
+            if ! command_exists brew; then
+                print_error "Homebrew not found. Please install Homebrew first."
+            fi
+            brew install openjdk@11 openjdk@17 openjdk@21
+            print_success "OpenJDK 11, 17, and 21 installed via Homebrew."
+            ;;
+    esac
 }
 
 install_kotlin_sdk() {
@@ -109,64 +143,107 @@ install_kotlin_lsp() {
 }
 
 install_ripgrep_fd() {
-    print_info "Installing ripgrep and fd-find..."
-    if command_exists apt-get; then
-        sudo apt-get install -y ripgrep fd-find
-        if ! command_exists fd; then
-            sudo ln -s $(which fdfind) /usr/local/bin/fd
-        fi
-    elif command_exists dnf; then
-        sudo dnf install -y ripgrep fd-find
-    elif command_exists pacman; then
-        sudo pacman -S --noconfirm ripgrep fd
-    else
-        print_warning "Could not install ripgrep or fd-find with package manager. Please install them manually."
-    fi
-    print_success "ripgrep and fd-find installed."
+    print_info "Installing ripgrep and fd..."
+    case "$OS" in
+        "linux")
+            if command_exists apt-get; then
+                sudo apt-get install -y ripgrep fd-find
+                if ! command_exists fd; then
+                    sudo ln -s $(which fdfind) /usr/local/bin/fd
+                fi
+            elif command_exists dnf; then
+                sudo dnf install -y ripgrep fd-find
+            elif command_exists pacman; then
+                sudo pacman -S --noconfirm ripgrep fd
+            else
+                print_warning "Could not install ripgrep or fd with package manager. Please install them manually."
+            fi
+            ;;
+        "macos")
+            if ! command_exists brew; then
+                print_error "Homebrew not found. Please install Homebrew first."
+            fi
+            brew install ripgrep fd
+            ;;
+    esac
+    print_success "ripgrep and fd installed."
 }
 
 install_nerd_font() {
     print_info "Installing Ubuntu Mono Nerd Font..."
-    local font_dir="$HOME/.local/share/fonts"
-    if [ ! -d "$font_dir/UbuntuMono" ]; then
-        mkdir -p "$font_dir/UbuntuMono"
-        cd "$font_dir/UbuntuMono"
-        curl -fLo "Ubuntu Mono Nerd Font Complete.zip" https://github.com/ryanoasis/nerd-fonts/releases/download/v3.1.1/UbuntuMono.zip
-        unzip "Ubuntu Mono Nerd Font Complete.zip"
-        rm "Ubuntu Mono Nerd Font Complete.zip"
-        fc-cache -fv
+    local font_dir
+    case "$OS" in
+        "linux")
+            font_dir="$HOME/.local/share/fonts"
+            ;;
+        "macos")
+            font_dir="$HOME/Library/Fonts"
+            ;;
+    esac
+
+    if [ ! -d "$font_dir" ]; then
+        mkdir -p "$font_dir"
+    fi
+
+    if [ ! -f "$font_dir/UbuntuMonoNerdFont-Regular.ttf" ]; then
+        cd /tmp
+        curl -fLo "UbuntuMono.zip" https://github.com/ryanoasis/nerd-fonts/releases/download/v3.1.1/UbuntuMono.zip
+        unzip -o "UbuntuMono.zip" -d "$font_dir"
+        rm "UbuntuMono.zip"
+
+        if [ "$OS" = "linux" ]; then
+            fc-cache -fv
+        fi
+
         print_success "Ubuntu Mono Nerd Font installed."
         print_success "You may now set your terminal font to 'Ubuntu Mono Nerd Font'. This will enhance the appearance of Neovim and its plugins."
-        print_success "If you are using WSL, you will need to download the font on your Windows host and set it in your terminal emulator. Go to https://nerdfonts.com/font-downloads to download the font. (You can choose any Nerd Font you like!, this script just installs Ubuntu Mono)"
+        if [ "$OS" = "linux" ] && grep -qi "microsoft" /proc/version 2>/dev/null; then
+            print_success "If you are using WSL, you will need to download the font on your Windows host and set it in your terminal emulator. Go to https://nerdfonts.com/font-downloads to download the font. (You can choose any Nerd Font you like!, this script just installs Ubuntu Mono)"
+        fi
     else
-        print_info "Ubuntu Mono Nerd Font directory already exists. Skipping installation."
+        print_info "Ubuntu Mono Nerd Font already installed. Skipping installation."
     fi
 }
 
 install_neovim() {
-    print_info "Installing Neovim (>=0.11.x)..."
-    if ! command_exists nvim || (command_exists nvim && ! nvim --version | head -n 1 | grep -q "0.1[1-9]"); then
-        cd /tmp
-        curl -fLo nvim.appimage https://github.com/neovim/neovim/releases/latest/download/nvim.appimage
-        chmod u+x nvim.appimage
-        if [ ! -d "$HOME/.local/bin" ]; then
-            mkdir -p "$HOME/.local/bin"
-        fi
-        sudo mv nvim.appimage /usr/local/bin/nvim
-        print_success "Neovim AppImage installed to /usr/local/bin/nvim."
-    else
-        print_info "Neovim >=0.11.x is already installed."
-    fi
+    print_info "Installing Neovim (latest stable)..."
+    case "$OS" in
+        "linux")
+            if ! command_exists nvim || (command_exists nvim && ! nvim --version | head -n 1 | grep -q "0.1[0-9]"); then
+                cd /tmp
+                curl -fLo nvim.appimage https://github.com/neovim/neovim/releases/latest/download/nvim.appimage
+                chmod u+x nvim.appimage
+                if [ ! -d "$HOME/.local/bin" ]; then
+                    mkdir -p "$HOME/.local/bin"
+                fi
+                if sudo mv nvim.appimage /usr/local/bin/nvim; then
+                    print_success "Neovim AppImage installed to /usr/local/bin/nvim."
+                else
+                    mv nvim.appimage "$HOME/.local/bin/nvim"
+                    print_success "Neovim AppImage installed to $HOME/.local/bin/nvim."
+                    print_warning "Make sure $HOME/.local/bin is in your PATH."
+                fi
+            else
+                print_info "Neovim is already installed."
+            fi
+            ;;
+        "macos")
+            if ! command_exists brew; then
+                print_error "Homebrew not found. Please install Homebrew first."
+            fi
+            brew install neovim
+            print_success "Neovim installed via Homebrew."
+            ;;
+    esac
 }
 
 install_win32yank() {
-    print_info "Installing win32yank (for WSL clipboard integration)..."
-
-    if ! grep -qi "microsoft" /proc/version 2>/dev/null; then
-        print_info "Not running under WSL. Skipping win32yank. Consider installing wl-clipboard or xclip instead."
+    if [ "$OS" != "linux" ] || ! grep -qi "microsoft" /proc/version 2>/dev/null; then
+        print_info "Not running under WSL. Skipping win32yank."
         return 0
     fi
 
+    print_info "Installing win32yank (for WSL clipboard integration)..."
     local bin_dir="$HOME/.local/bin"
     local exe_path="$bin_dir/win32yank.exe"
     local version="v0.1.1"
@@ -197,7 +274,12 @@ install_win32yank() {
     fi
 }
 
-install_linux_clipboard_tools() {
+install_clipboard_tools() {
+    if [ "$OS" = "macos" ]; then
+        print_info "macOS has built-in clipboard tools (pbcopy/pbpaste). Skipping installation."
+        return 0
+    fi
+
     print_info "Installing Linux clipboard tools (wl-clipboard/xclip)..."
     if command_exists apt-get; then
         sudo apt-get install -y wl-clipboard xclip
@@ -212,6 +294,7 @@ install_linux_clipboard_tools() {
 }
 
 install_nvim_packages() {
+    print_info "Installing Neovim plugins and Mason packages..."
     nvim --headless "+Lazy! sync" +qa
     nvim --headless "+MasonUpdate" +qa
 
@@ -222,7 +305,7 @@ install_nvim_packages() {
       'jdtls',
       'eslint_d',
       'prettierd',
-      'prettier', 
+      'prettier',
       'stylua',
     }
     local mr = require('mason-registry')
@@ -235,19 +318,24 @@ install_nvim_packages() {
       end
     end
     if #targets == 0 then
+      print('All Mason packages are already installed.')
       return
     end
+    print('Installing ' .. #targets .. ' Mason package(s)...')
     local done = 0
     for _, p in ipairs(targets) do
       p:install():on('closed', function() done = done + 1 end)
     end
     vim.wait(600000, function() return done == #targets end, 200)
+    print('Mason package installation complete.')
     " +qa
+    print_success "Neovim setup complete."
 }
 
 # --- Main Execution ---
 main() {
-    print_info "Starting Neovim prerequisites installation..."
+    detect_os
+    print_info "Starting Neovim prerequisites installation for $OS..."
 
     install_system_packages
     install_fnm_and_node
@@ -259,7 +347,7 @@ main() {
     install_nerd_font
     install_neovim
     install_win32yank
-    install_linux_clipboard_tools
+    install_clipboard_tools
     install_nvim_packages
 
     print_success "All prerequisites have been installed successfully!"
