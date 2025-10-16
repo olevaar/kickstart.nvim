@@ -76,8 +76,10 @@ install_fnm_and_node() {
     export PATH="$HOME/.local/share/fnm:$PATH"
     eval "$(fnm env)"
     print_success "fnm installed."
+    setup_fnm_shell
   else
     print_info "fnm is already installed."
+    setup_fnm_shell
   fi
 
   if ! fnm list | grep -q "v22"; then
@@ -85,6 +87,54 @@ install_fnm_and_node() {
   fi
   fnm default 22
   print_success "Node.js v22 is set as the default."
+}
+
+setup_fnm_shell() {
+  print_info "Configuring shell for fnm..."
+  local profile_file
+  local shell_name
+  shell_name=$(basename "$SHELL")
+
+  case "$shell_name" in
+  "bash") profile_file="$HOME/.bashrc" ;;
+  "zsh") profile_file="$HOME/.zshrc" ;;
+  "fish") profile_file="$HOME/.config/fish/config.fish" ;;
+  *)
+    print_warning "Could not detect shell ($shell_name). Please add fnm to your shell profile manually."
+    print_warning "Add the following lines to your shell configuration file:"
+    print_warning "For bash/zsh: "
+    print_warning "  export PATH=\"\$HOME/.local/share/fnm:\$PATH\""
+    print_warning "  eval \"\$(fnm env)\""
+    print_warning "For fish: "
+    print_warning "  fish_add_path \"\$HOME/.local/share/fnm\""
+    print_warning "  fnm env | source"
+    return
+    ;;
+  esac
+
+  if [ ! -f "$profile_file" ]; then
+    print_info "Creating shell profile file: $profile_file"
+    touch "$profile_file"
+  fi
+
+  local fnm_path_str="export PATH=\"\$HOME/.local/share/fnm:\$PATH\""
+  local fnm_env_str="eval \"\$(fnm env)\""
+
+  if [ "$shell_name" = "fish" ]; then
+    fnm_path_str="fish_add_path \"\$HOME/.local/share/fnm\""
+    fnm_env_str="fnm env | source"
+  fi
+
+  if ! grep -q "fnm env" "$profile_file"; then
+    print_info "Adding fnm configuration to $profile_file"
+    echo "" >>"$profile_file"
+    echo "# fnm (Fast Node Manager)" >>"$profile_file"
+    echo "$fnm_path_str" >>"$profile_file"
+    echo "$fnm_env_str" >>"$profile_file"
+    print_success "fnm configured in $profile_file."
+  else
+    print_info "fnm configuration already present in $profile_file."
+  fi
 }
 
 install_npm_packages() {
