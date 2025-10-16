@@ -3,7 +3,7 @@ local M = {}
 local started = {} ---@type table<string, boolean>
 
 local function find_root_from(dir)
-  local markers = { 'gradlew', 'mvnw', 'pom.xml', 'build.gradle', 'build.gradle.kts', '.git' }
+  local markers = { 'gradlew', 'mvnw', 'pom.xml', 'build.gradle', 'build.gradle.kts' }
   local found = vim.fs.find(markers, { upward = true, path = dir })[1]
   return found and vim.fs.dirname(found) or nil
 end
@@ -68,7 +68,6 @@ local function is_kotlin_only(root)
   return (not has_java) and has_kotlin
 end
 
--- Collect debug/test bundles from Mason (safe if missing)
 local function collect_bundles()
   local mr = vim.fn.stdpath 'data' .. '/mason/packages'
   local dbg = mr .. '/java-debug-adapter/extension/server/com.microsoft.java.debug.plugin-*.jar'
@@ -105,21 +104,17 @@ local function start_for_root(root, opts)
     return
   end
 
-  -- Build config + always include debug/test bundles
   local cfg = build.build(root, opts.config_opts or {})
   local bundles = collect_bundles()
   cfg.init_options = cfg.init_options or {}
   cfg.init_options.bundles = cfg.init_options.bundles or {}
   vim.list_extend(cfg.init_options.bundles, bundles)
 
-  -- Start/attach LS
   jdtls.start_or_attach(cfg)
   started[root] = true
 
-  -- 🔌 Always register the DAP adapter (idempotent)
   jdtls.setup_dap { hotcodereplace = 'auto' }
 
-  -- ✅ Only generate per-main-class configs when a jdtls client is attached for this root
   local function jdtls_attached_for_root()
     for _, c in ipairs(vim.lsp.get_clients { name = 'jdtls' }) do -- get_active_clients() is deprecated
       if c.config and c.config.root_dir == root then

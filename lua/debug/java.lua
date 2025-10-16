@@ -35,14 +35,11 @@ local function load_env_file(path)
     return env
   end
   for line in f:lines() do
-    -- strip comments and whitespace
     line = line:gsub('^%s+', ''):gsub('%s+$', '')
     if line ~= '' and not line:match '^#' then
-      -- allow optional leading "export "
       line = line:gsub('^export%s+', '')
       local k, v = line:match '^([A-Za-z_][A-Za-z0-9_]*)=(.*)$'
       if k and v then
-        -- remove surrounding quotes if present
         v = v:gsub('^[\'"](.*)[\'"]$', '%1')
         env[k] = v
       end
@@ -66,7 +63,6 @@ table.insert(dap.configurations.java, {
   mainClass = 'com.lgc.dist.core.msp.grizzly.GrizzlyServer',
   cwd = '${workspaceFolder}',
   env = function()
-    -- expand ${workspaceFolder} at runtime
     local root = vim.fn.getcwd()
     return load_env_file(root .. '/oec_env.list')
   end,
