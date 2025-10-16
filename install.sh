@@ -96,14 +96,43 @@ install_npm_packages() {
 
 install_java_sdks() {
     print_info "Installing OpenJDK versions..."
+
+    _install_java_with_sdkman() {
+        if [ ! -d "$HOME/.sdkman" ]; then
+            print_info "Installing SDKMAN! to manage Java versions..."
+            curl -s "https://get.sdkman.io" | bash
+        fi
+        source "$HOME/.sdkman/bin/sdkman-init.sh"
+        print_info "Installing Java $1 via SDKMAN!..."
+        sdk install java "$1"
+    }
+
     case "$OS" in
         "linux")
             if command_exists apt-get; then
                 sudo apt-get update
-                sudo apt-get install -y openjdk-11-jdk openjdk-17-jdk openjdk-21-jdk
-                print_success "OpenJDK 11, 17, and 21 installed."
+                print_info "Attempting to install OpenJDK 11 with apt..."
+                if ! sudo apt-get install -y openjdk-11-jdk; then
+                    print_warning "openjdk-11-jdk not available via apt, falling back to SDKMAN!."
+                    _install_java_with_sdkman "11.0.23-tem"
+                fi
+                print_info "Attempting to install OpenJDK 17 with apt..."
+                if ! sudo apt-get install -y openjdk-17-jdk; then
+                    print_warning "openjdk-17-jdk not available via apt, falling back to SDKMAN!."
+                    _install_java_with_sdkman "17.0.11-tem"
+                fi
+                print_info "Attempting to install OpenJDK 21 with apt..."
+                if ! sudo apt-get install -y openjdk-21-jdk; then
+                    print_warning "openjdk-21-jdk not available via apt, falling back to SDKMAN!."
+                    _install_java_with_sdkman "21.0.3-tem"
+                fi
+                print_success "OpenJDK installation process completed."
             else
-                print_warning "apt-get not found. Skipping OpenJDK installation. Please install them manually."
+                print_warning "apt-get not found. Using SDKMAN! to install Java versions."
+                _install_java_with_sdkman "11.0.23-tem"
+                _install_java_with_sdkman "17.0.11-tem"
+                _install_java_with_sdkman "21.0.3-tem"
+                print_success "OpenJDK installation process completed."
             fi
             ;;
         "macos")
