@@ -90,7 +90,7 @@ install_fnm_and_node() {
 install_npm_packages() {
   # Language servers from npm get installed by Mason, so we only install what mason doesn't cover
   print_info "Installing global npm packages (markdownlint, @google/gemini-cli)..."
-  npm install -g markdownlint @google/gemini-cli
+  npm install -g markdownlint-cli @google/gemini-cli
   print_success "Global npm packages installed."
 }
 
@@ -384,4 +384,3 @@ main() {
 }
 
 main
-
