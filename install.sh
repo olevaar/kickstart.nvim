@@ -374,21 +374,21 @@ install_clipboard_tools() {
 
 install_fuse() {
   if [ "$OS" != "linux" ]; then
-    print_info "Not running on Linux. Skipping fuse installation."
+    print_info "Not running on Linux. Skipping fuse3 installation."
     return 0
   fi
 
-  print_info "Installing fuse (for AppImage support)..."
+  print_info "Installing fuse3 (for AppImage support)..."
   if command_exists apt-get; then
-    sudo apt-get install -y fuse
+    sudo apt-get install -y fuse3
   elif command_exists dnf; then
-    sudo dnf install -y fuse
+    sudo dnf install -y fuse3
   elif command_exists pacman; then
-    sudo pacman -S --noconfirm fuse2
+    sudo pacman -S --noconfirm fuse3
   else
-    print_warning "Could not install fuse automatically. Please install it manually if you intend to use AppImages."
+    print_warning "Could not install fuse3 automatically. Please install it manually if you intend to use AppImages."
   fi
-  print_success "Fuse installed."
+  print_success "Fuse3 installed."
 }
 
 install_nvim_packages() {
@@ -454,3 +454,4 @@ main() {
 }
 
 main
+
