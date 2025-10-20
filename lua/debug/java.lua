@@ -50,8 +50,8 @@ local function load_env_file(path)
 end
 
 local java11 = os.getenv 'JAVA_HOME_11' or '/usr/lib/jvm/java-11-openjdk-amd64'
-local java17 = os.getenv 'JAVA_HOME_17' or '/usr/lib/jvm/java-17-openjdk-amd64'
-local java21 = os.getenv 'JAVA_HOME_21' or '/usr/lib/jvm/java-21-openjdk-amd64'
+-- local java17 = os.getenv 'JAVA_HOME_17' or '/usr/lib/jvm/java-17-openjdk-amd64'
+-- local java21 = os.getenv 'JAVA_HOME_21' or '/usr/lib/jvm/java-21-openjdk-amd64'
 
 dap.configurations.java = dap.configurations.java or {}
 
@@ -93,7 +93,6 @@ vim.api.nvim_create_user_command('JavaMspRun', function()
 end, {})
 
 vim.api.nvim_create_user_command('JavaRun', function()
-  local dap = require 'dap'
   if not dap.adapters.java then
     vim.notify('Java DAP not initialized yet. Open a Java file so JDTLS can set it up.', vim.log.levels.WARN)
     return
