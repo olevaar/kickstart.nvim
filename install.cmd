@@ -4,6 +4,8 @@ setlocal
 :: Neovim Config Prerequisites Installation Script for Windows
 ::
 :: This script installs all the necessary dependencies for the kickstart.nvim configuration on Windows.
+:: 
+:: This script was implemented by Gemini, and is currently untested. 
 
 set "USER_HOME=%USERPROFILE%"
 
