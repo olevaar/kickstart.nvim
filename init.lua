@@ -67,7 +67,7 @@ vim.opt.tabstop = 2
 vim.opt.shiftwidth = 2
 vim.opt.expandtab = true
 vim.opt.smartindent = true
-vim.opt.colorcolumn = '100'
+vim.opt.colorcolumn = '120'
 vim.opt.softtabstop = 2
 
 local rtp = vim.opt.rtp
