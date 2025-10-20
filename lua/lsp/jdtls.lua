@@ -1,7 +1,5 @@
 local M = {}
 
-local started = {} ---@type table<string, boolean>
-
 local function find_root_from(dir)
   local markers = { 'gradlew', 'mvnw', 'pom.xml', 'build.gradle', 'build.gradle.kts' }
   local found = vim.fs.find(markers, { upward = true, path = dir })[1]
@@ -56,7 +54,10 @@ local function buildfiles_indicate_kotlin(root)
       return true
     end
   end
-  if file_contains(root .. '/pom.xml', { '<groupid>org.jetbrains.kotlin</groupid>', 'kotlin-maven-plugin' }) then
+  if file_contains(root .. '/pom.xml', {
+    '<groupid>org.jetbrains.kotlin</groupid>',
+    'kotlin-maven-plugin',
+  }) then
     return true
   end
   return false
@@ -111,12 +112,14 @@ local function start_for_root(root, opts)
   vim.list_extend(cfg.init_options.bundles, bundles)
 
   jdtls.start_or_attach(cfg)
-  started[root] = true
 
-  jdtls.setup_dap { hotcodereplace = 'auto' }
+  jdtls.setup_dap {
+    hotcodereplace = 'auto',
+    config_overrides = {},
+  }
 
   local function jdtls_attached_for_root()
-    for _, c in ipairs(vim.lsp.get_clients { name = 'jdtls' }) do -- get_active_clients() is deprecated
+    for _, c in ipairs(vim.lsp.get_clients { name = 'jdtls' }) do
       if c.config and c.config.root_dir == root then
         return true
       end

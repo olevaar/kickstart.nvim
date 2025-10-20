@@ -58,6 +58,7 @@ function M.build(root, opts)
       configuration = { updateBuildConfiguration = 'interactive' },
       maven = { downloadSources = true },
       format = { enabled = true },
+      autobuild = { enabled = true },
     },
   }, opts.settings or {})
 
