@@ -7,7 +7,8 @@ return {
 
     { 'j-hui/fidget.nvim', opts = {} },
 
-    'saghen/blink.cmp',
+    -- 'saghen/blink.cmp',
+    'hrsh7th/cmp-nvim-lsp',
   },
   config = function()
     require 'configs.lspconfig'
