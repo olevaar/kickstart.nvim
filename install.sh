@@ -32,6 +32,21 @@ command_exists() {
   command -v "$1" &>/dev/null
 }
 
+get_latest_github_release() {
+  local repo="$1"
+  curl -s "https://api.github.com/repos/${repo}/releases/latest" | grep '"tag_name"' | cut -d '"' -f 4
+}
+
+check_sudo() {
+  if ! command_exists sudo; then
+    print_error "sudo is required but not installed. Please install sudo or run this script as root."
+  fi
+  if ! sudo -n true 2>/dev/null; then
+    print_info "This script requires sudo privileges. You may be prompted for your password."
+    sudo -v || print_error "Failed to obtain sudo privileges."
+  fi
+}
+
 detect_os() {
   print_info "Detecting operating system..."
   case "$(uname -s)" in
@@ -48,6 +63,7 @@ install_system_packages() {
   print_info "Installing essential system packages..."
   case "$OS" in
   "linux")
+    check_sudo
     if command_exists apt-get; then
       sudo apt-get update
       sudo apt-get install -y curl git build-essential unzip
@@ -140,7 +156,9 @@ setup_fnm_shell() {
 install_npm_packages() {
   # Language servers from npm get installed by Mason, so we only install what mason doesn't cover
   print_info "Installing global npm packages (markdownlint, @google/gemini-cli)..."
-  npm install -g markdownlint-cli @google/gemini-cli
+  if ! npm install -g markdownlint-cli @google/gemini-cli; then
+    print_error "Failed to install npm packages. Please check your npm installation."
+  fi
   print_success "Global npm packages installed."
 }
 
@@ -151,15 +169,23 @@ install_java_sdks() {
     if [ ! -d "$HOME/.sdkman" ]; then
       print_info "Installing SDKMAN! to manage Java versions..."
       curl -s "https://get.sdkman.io" | bash
+      if [ ! -f "$HOME/.sdkman/bin/sdkman-init.sh" ]; then
+        print_error "SDKMAN! installation failed."
+      fi
     fi
-    source "$HOME/.sdkman/bin/sdkman-init.sh"
+    if ! source "$HOME/.sdkman/bin/sdkman-init.sh"; then
+      print_error "Failed to initialize SDKMAN!."
+    fi
     print_info "Installing Java $1 via SDKMAN!..."
-    sdk install java "$1"
+    if ! sdk install java "$1"; then
+      print_warning "Failed to install Java $1 via SDKMAN!."
+    fi
   }
 
   case "$OS" in
   "linux")
     if command_exists apt-get; then
+      check_sudo
       sudo apt-get update
       print_info "Attempting to install OpenJDK 11 with apt..."
       if ! sudo apt-get install -y openjdk-11-jdk; then
@@ -199,22 +225,44 @@ install_kotlin_sdk() {
   print_info "Installing SDKMAN! and Kotlin..."
   if [ ! -d "$HOME/.sdkman" ]; then
     curl -s "https://get.sdkman.io" | bash
-    source "$HOME/.sdkman/bin/sdkman-init.sh"
-  else
-    source "$HOME/.sdkman/bin/sdkman-init.sh"
+    if [ ! -f "$HOME/.sdkman/bin/sdkman-init.sh" ]; then
+      print_error "SDKMAN! installation failed."
+    fi
   fi
 
-  sdk install kotlin
+  if ! source "$HOME/.sdkman/bin/sdkman-init.sh"; then
+    print_error "Failed to initialize SDKMAN!."
+  fi
+
+  if ! sdk install kotlin; then
+    print_warning "Failed to install Kotlin SDK via SDKMAN!."
+  fi
   print_success "Kotlin SDK installed via SDKMAN!."
 }
 
 install_kotlin_lsp() {
   print_info "Installing kotlin-lsp..."
   if [ ! -d "$HOME/kotlin-language-server" ]; then
+    local original_dir="$PWD"
     git clone https://github.com/fwcd/kotlin-language-server "$HOME/kotlin-language-server"
-    cd "$HOME/kotlin-language-server"
-    ./gradlew :server:installDist
-    sudo ln -sf "$HOME/kotlin-language-server/server/build/install/server/bin/kotlin-language-server" /usr/local/bin/
+    cd "$HOME/kotlin-language-server" || print_error "Failed to change directory to $HOME/kotlin-language-server"
+
+    if [ ! -f "./gradlew" ]; then
+      cd "$original_dir"
+      print_error "gradlew not found in kotlin-language-server repository."
+    fi
+
+    if ! ./gradlew :server:installDist; then
+      cd "$original_dir"
+      print_error "Failed to build kotlin-language-server."
+    fi
+
+    check_sudo
+    if ! sudo ln -sf "$HOME/kotlin-language-server/server/build/install/server/bin/kotlin-language-server" /usr/local/bin/; then
+      print_warning "Failed to create symlink in /usr/local/bin. You may need to add $HOME/kotlin-language-server/server/build/install/server/bin to your PATH."
+    fi
+
+    cd "$original_dir"
     print_success "kotlin-lsp installed."
   else
     print_info "kotlin-lsp directory already exists. Skipping clone and build."
@@ -225,10 +273,11 @@ install_ripgrep_fd() {
   print_info "Installing ripgrep and fd..."
   case "$OS" in
   "linux")
+    check_sudo
     if command_exists apt-get; then
       sudo apt-get install -y ripgrep fd-find
-      if ! command_exists fd; then
-        sudo ln -s $(which fdfind) /usr/local/bin/fd
+      if ! command_exists fd && command_exists fdfind; then
+        sudo ln -s "$(which fdfind)" /usr/local/bin/fd
       fi
     elif command_exists dnf; then
       sudo dnf install -y ripgrep fd-find
@@ -251,6 +300,8 @@ install_ripgrep_fd() {
 install_nerd_font() {
   print_info "Installing Ubuntu Mono Nerd Font..."
   local font_dir
+  local original_dir="$PWD"
+
   case "$OS" in
   "linux")
     font_dir="$HOME/.local/share/fonts"
@@ -265,8 +316,24 @@ install_nerd_font() {
   fi
 
   if [ ! -f "$font_dir/UbuntuMonoNerdFont-Regular.ttf" ]; then
-    cd /tmp
-    curl -fLo "UbuntuMono.zip" https://github.com/ryanoasis/nerd-fonts/releases/download/v3.1.1/UbuntuMono.zip
+    cd /tmp || print_error "Failed to change directory to /tmp"
+
+    print_info "Fetching latest Nerd Fonts release..."
+    local nerd_fonts_version
+    nerd_fonts_version=$(get_latest_github_release "ryanoasis/nerd-fonts")
+    if [ -z "$nerd_fonts_version" ]; then
+      print_warning "Failed to fetch latest Nerd Fonts version, using fallback v3.1.1"
+      nerd_fonts_version="v3.1.1"
+    fi
+
+    local font_url="https://github.com/ryanoasis/nerd-fonts/releases/download/${nerd_fonts_version}/UbuntuMono.zip"
+    print_info "Downloading Ubuntu Mono Nerd Font ${nerd_fonts_version}..."
+
+    if ! curl -fLo "UbuntuMono.zip" "$font_url"; then
+      cd "$original_dir"
+      print_error "Failed to download Nerd Font from ${font_url}"
+    fi
+
     unzip -o "UbuntuMono.zip" -d "$font_dir"
     rm "UbuntuMono.zip"
 
@@ -274,6 +341,7 @@ install_nerd_font() {
       fc-cache -fv
     fi
 
+    cd "$original_dir"
     print_success "Ubuntu Mono Nerd Font installed."
     print_success "You may now set your terminal font to 'Ubuntu Mono Nerd Font'. This will enhance the appearance of Neovim and its plugins."
     if [ "$OS" = "linux" ] && grep -qi "microsoft" /proc/version 2>/dev/null; then
@@ -288,22 +356,61 @@ install_neovim() {
   print_info "Installing Neovim (latest stable)..."
   case "$OS" in
   "linux")
-    if ! command_exists nvim || (command_exists nvim && ! nvim --version | head -n 1 | grep -q "0.1[0-9]"); then
-      cd /tmp
-      curl -fLo nvim.appimage https://github.com/neovim/neovim/releases/download/v0.11.4/nvim-linux-x86_64.appimage
+    local needs_install=false
+    if ! command_exists nvim; then
+      needs_install=true
+    else
+      local nvim_version
+      nvim_version=$(nvim --version | head -n 1 | grep -oP 'v\K[0-9]+\.[0-9]+' || echo "0.0")
+      local major minor
+      major=$(echo "$nvim_version" | cut -d. -f1)
+      minor=$(echo "$nvim_version" | cut -d. -f2)
+
+      if [ "$major" -lt 1 ] && [ "$minor" -lt 10 ]; then
+        needs_install=true
+      fi
+    fi
+
+    if [ "$needs_install" = true ]; then
+      local original_dir="$PWD"
+      cd /tmp || print_error "Failed to change directory to /tmp"
+
+      print_info "Fetching latest Neovim release..."
+      local nvim_version
+      nvim_version=$(get_latest_github_release "neovim/neovim")
+      if [ -z "$nvim_version" ]; then
+        print_warning "Failed to fetch latest Neovim version, using fallback v0.11.4"
+        nvim_version="v0.11.4"
+      fi
+
+      local nvim_url="https://github.com/neovim/neovim/releases/download/${nvim_version}/nvim.appimage"
+      print_info "Downloading Neovim ${nvim_version}..."
+
+      if ! curl -fLo nvim.appimage "$nvim_url"; then
+        cd "$original_dir"
+        print_error "Failed to download Neovim AppImage from ${nvim_url}"
+      fi
+
       chmod u+x nvim.appimage
       if [ ! -d "$HOME/.local/bin" ]; then
         mkdir -p "$HOME/.local/bin"
       fi
-      if sudo mv nvim.appimage /usr/local/bin/nvim; then
+
+      if sudo mv nvim.appimage /usr/local/bin/nvim 2>/dev/null; then
         print_success "Neovim AppImage installed to /usr/local/bin/nvim."
       else
         mv nvim.appimage "$HOME/.local/bin/nvim"
         print_success "Neovim AppImage installed to $HOME/.local/bin/nvim."
-        print_warning "Make sure $HOME/.local/bin is in your PATH."
+
+        if [[ ":$PATH:" != *":$HOME/.local/bin:"* ]]; then
+          print_warning "Make sure $HOME/.local/bin is in your PATH."
+          print_info "Add this to your shell profile: export PATH=\"\$HOME/.local/bin:\$PATH\""
+        fi
       fi
+
+      cd "$original_dir"
     else
-      print_info "Neovim is already installed."
+      print_info "Neovim is already installed with a supported version."
     fi
     ;;
   "macos")
@@ -325,20 +432,32 @@ install_win32yank() {
   print_info "Installing win32yank (for WSL clipboard integration)..."
   local bin_dir="$HOME/.local/bin"
   local exe_path="$bin_dir/win32yank.exe"
-  local version="v0.1.1"
-  local zip_url="https://github.com/equalsraf/win32yank/releases/download/${version}/win32yank-x64.zip"
 
   if [ -f "$exe_path" ]; then
     print_info "win32yank already present at $exe_path"
     return 0
   fi
 
+  print_info "Fetching latest win32yank release..."
+  local version
+  version=$(get_latest_github_release "equalsraf/win32yank")
+  if [ -z "$version" ]; then
+    print_warning "Failed to fetch latest win32yank version, using fallback v0.1.1"
+    version="v0.1.1"
+  fi
+
+  local zip_url="https://github.com/equalsraf/win32yank/releases/download/${version}/win32yank-x64.zip"
+
   mkdir -p "$bin_dir"
   tmp_zip="$(mktemp /tmp/win32yank.XXXXXX.zip)"
-  print_info "Downloading $zip_url ..."
-  curl -fsSL -o "$tmp_zip" "$zip_url" || print_error "Failed to download win32yank ZIP."
+  print_info "Downloading win32yank ${version}..."
 
-  print_info "Extracting win32yank.exe ..."
+  if ! curl -fsSL -o "$tmp_zip" "$zip_url"; then
+    rm -f "$tmp_zip"
+    print_error "Failed to download win32yank ZIP from ${zip_url}"
+  fi
+
+  print_info "Extracting win32yank.exe..."
   if unzip -p "$tmp_zip" win32yank.exe >"$exe_path"; then
     chmod +x "$exe_path"
     rm -f "$tmp_zip"
@@ -351,6 +470,11 @@ install_win32yank() {
   if [ -d "/usr/local/bin" ] && [ -w "/usr/local/bin" ]; then
     ln -sf "$exe_path" /usr/local/bin/win32yank.exe
   fi
+
+  if [[ ":$PATH:" != *":$HOME/.local/bin:"* ]]; then
+    print_warning "Make sure $HOME/.local/bin is in your PATH."
+    print_info "Add this to your shell profile: export PATH=\"\$HOME/.local/bin:\$PATH\""
+  fi
 }
 
 install_clipboard_tools() {
@@ -360,6 +484,7 @@ install_clipboard_tools() {
   fi
 
   print_info "Installing Linux clipboard tools (wl-clipboard/xclip)..."
+  check_sudo
   if command_exists apt-get; then
     sudo apt-get install -y wl-clipboard xclip
   elif command_exists dnf; then
@@ -379,6 +504,7 @@ install_fuse() {
   fi
 
   print_info "Installing fuse3 (for AppImage support)..."
+  check_sudo
   if command_exists apt-get; then
     sudo apt-get install -y fuse3
   elif command_exists dnf; then
@@ -393,9 +519,18 @@ install_fuse() {
 
 install_nvim_packages() {
   print_info "Installing Neovim plugins and Mason packages..."
-  nvim --headless "+Lazy! sync" +qa
-  nvim --headless "+MasonUpdate" +qa
 
+  print_info "Syncing Lazy plugins..."
+  if ! nvim --headless "+Lazy! sync" +qa; then
+    print_warning "Lazy plugin sync encountered issues but continuing..."
+  fi
+
+  print_info "Updating Mason registry..."
+  if ! nvim --headless "+MasonUpdate" +qa; then
+    print_warning "Mason update encountered issues but continuing..."
+  fi
+
+  print_info "Installing Mason packages (this may take several minutes)..."
   nvim --headless +"lua
     local pkgs = {
       'typescript-language-server',
@@ -421,11 +556,20 @@ install_nvim_packages() {
     end
     print('Installing ' .. #targets .. ' Mason package(s)...')
     local done = 0
+    local total = #targets
     for _, p in ipairs(targets) do
-      p:install():on('closed', function() done = done + 1 end)
+      p:install():on('closed', function()
+        done = done + 1
+        print(string.format('Progress: %d/%d packages installed', done, total))
+      end)
     end
-    vim.wait(600000, function() return done == #targets end, 200)
-    print('Mason package installation complete.')
+    local result = vim.wait(300000, function() return done == total end, 1000)
+    if not result then
+      print('Warning: Mason package installation timed out after 5 minutes.')
+      print('Some packages may not be fully installed. You can run :MasonInstall manually.')
+    else
+      print('Mason package installation complete.')
+    end
     " +qa
   print_success "Neovim setup complete."
 }
@@ -433,6 +577,7 @@ install_nvim_packages() {
 # --- Main Execution ---
 main() {
   detect_os
+  check_sudo
   print_info "Starting Neovim prerequisites installation for $OS..."
 
   install_system_packages
@@ -454,4 +599,3 @@ main() {
 }
 
 main
-
