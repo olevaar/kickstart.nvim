@@ -165,6 +165,14 @@ chmod +x install.sh
 
 #### Avante.nvim and Github Copilot configuration
 
+> Note: I have decided to disable avante.nvim by default. Instead, I included
+magenta.nvim as the default AI assistant. If you want to use avante.nvim,
+you will need to enable it in the `lua/plugins/avante.lua` file by setting
+`enabled = true`. I found the copilot integration with avante.nvim to be a bit
+buggy, so I decided to disable it for now. In addition, there was some
+controversy about avante.nvim copying code from copilot without attribution a
+wile back.
+
 In this config Avante.nvim is setup to work with Github Copilot and Google
 Gemini. You can change these providers if you want (to for example Anthropic
 or OpenAI), or disable these plugins entirely.
