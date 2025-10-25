@@ -173,20 +173,20 @@ buggy, so I decided to disable it for now. In addition, there was some
 controversy about avante.nvim copying code from copilot without attribution a
 wile back.
 
-In this config Avante.nvim is setup to work with Github Copilot and Google
+~~ In this config Avante.nvim is setup to work with Github Copilot and Google
 Gemini. You can change these providers if you want (to for example Anthropic
-or OpenAI), or disable these plugins entirely.
+or OpenAI), or disable these plugins entirely. ~~
 
-Google Gemini requires an API key to work. You can get one from the
+~~ Google Gemini requires an API key to work. You can get one from the
 [Google AI Studio](https://developers.generativeai.google). Once you have the
-key, you can set it in your environment variables as `GOOGLE_API_KEY`.
+key, you can set it in your environment variables as `GOOGLE_API_KEY`. ~~
 
-Github Copilot requires you to be signed in to your Github account. You can do
+~~ Github Copilot requires you to be signed in to your Github account. You can do
 this by running `:Copilot auth` in Neovim. This will open a browser window
 where you can sign in to your account. Once you are signed in, you can start
-using Copilot.
+using Copilot. ~~
 
-The default keybinding for using Avante.nvim is ```<leader>an``` for a new chat
+~~ The default keybinding for using Avante.nvim is ```<leader>an``` for a new chat
 and ```<leader>aa``` to open the last chat. You can change these keybindings in
 the `lua/plugins/avante.lua` file. ```<leader>ap``` is used to toggle between
-providers.
+providers. ~~
