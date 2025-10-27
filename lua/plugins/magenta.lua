@@ -1,7 +1,7 @@
 return {
   'dlants/magenta.nvim',
   lazy = false,
-  build = 'npm install --frozen-lockfile',
+  build = 'npm ci',
   opts = {
     profiles = {
       {
