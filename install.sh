@@ -66,20 +66,20 @@ install_system_packages() {
     check_sudo
     if command_exists apt-get; then
       sudo apt-get update
-      sudo apt-get install -y curl git build-essential unzip
+      sudo apt-get install -y curl git build-essential unzip python3 python3-pip python3-venv pipx
     elif command_exists dnf; then
-      sudo dnf install -y curl git gcc-c++ make unzip
+      sudo dnf install -y curl git gcc-c++ make unzip python3 python3-pip pipx
     elif command_exists pacman; then
-      sudo pacman -Syu --noconfirm curl git base-devel unzip
+      sudo pacman -Syu --noconfirm curl git base-devel unzip python python-pip python-pipx
     else
-      print_error "Unsupported Linux package manager. Please install curl, git, build-essential, and unzip manually."
+      print_error "Unsupported Linux package manager. Please install curl, git, build-essential, unzip, python3, and pipx manually."
     fi
     ;;
   "macos")
     if ! command_exists brew; then
       print_error "Homebrew not found. Please install Homebrew first: https://brew.sh/"
     fi
-    brew install curl git unzip make
+    brew install curl git unzip make python pipx
     ;;
   esac
   print_success "Essential system packages installed."
@@ -151,6 +151,19 @@ setup_fnm_shell() {
   else
     print_info "fnm configuration already present in $profile_file."
   fi
+}
+
+install_python_packages() {
+  print_info "Installing Python packages via pipx (mdformat)..."
+  if ! command_exists pipx; then
+    print_error "pipx not found. Please ensure system packages are installed correctly."
+  fi
+
+  pipx ensurepath
+  if ! pipx install mdformat; then
+    print_warning "Failed to install mdformat via pipx."
+  fi
+  print_success "Python packages installed."
 }
 
 install_npm_packages() {
@@ -582,6 +595,7 @@ main() {
 
   install_system_packages
   install_fnm_and_node
+  install_python_packages
   install_npm_packages
   install_java_sdks
   install_kotlin_sdk

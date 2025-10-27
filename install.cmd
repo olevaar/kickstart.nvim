@@ -59,7 +59,7 @@ set "USER_HOME=%USERPROFILE%"
     exit /b 1
 
 :install_system_packages
-    call :print_info "Installing essential system packages (Git, 7-Zip, Visual Studio Build Tools)..."
+    call :print_info "Installing essential system packages (Git, 7-Zip, Python, Visual Studio Build Tools)..."
     winget install --id Git.Git -e --accept-source-agreements --accept-package-agreements
     if %errorlevel% neq 0 (
         call :print_warning "Git installation failed or was skipped."
@@ -68,6 +68,12 @@ set "USER_HOME=%USERPROFILE%"
     winget install --id 7zip.7zip -e --accept-source-agreements --accept-package-agreements
     if %errorlevel% neq 0 (
         call :print_warning "7-Zip installation failed or was skipped."
+    )
+    
+    call :print_info "Installing Python..."
+    winget install --id Python.Python.3.12 -e --accept-source-agreements --accept-package-agreements
+    if %errorlevel% neq 0 (
+        call :print_warning "Python installation failed or was skipped."
     )
     
     call :print_info "Installing Visual Studio Build Tools (this may take a while)..."
@@ -116,6 +122,54 @@ set "USER_HOME=%USERPROFILE%"
     )
     
     call :print_success "Node.js v22 setup completed."
+    exit /b 0
+
+:install_python_packages
+    call :print_info "Installing Python packages via pipx (mdformat)..."
+    
+    :: Check if python is available
+    call :command_exists python
+    if %errorlevel% neq 0 (
+        call :print_warning "Python is not available in PATH. This is expected if Python was just installed."
+        call :print_info "Please restart your shell and run: python -m pip install --user pipx && python -m pipx ensurepath && pipx install mdformat"
+        exit /b 0
+    )
+    
+    :: Install pipx if not already installed
+    call :command_exists pipx
+    if %errorlevel% neq 0 (
+        call :print_info "Installing pipx..."
+        python -m pip install --user pipx
+        if %errorlevel% neq 0 (
+            call :print_warning "Failed to install pipx. You may need to restart your shell and try again."
+            exit /b 0
+        )
+        
+        python -m pipx ensurepath
+        if %errorlevel% neq 0 (
+            call :print_warning "Failed to configure pipx PATH."
+        )
+        
+        :: Add pipx to current session PATH
+        set "PATH=%USERPROFILE%\AppData\Roaming\Python\Python312\Scripts;%PATH%"
+    ) else (
+        call :print_info "pipx is already installed."
+    )
+    
+    :: Install mdformat
+    call :command_exists pipx
+    if %errorlevel% neq 0 (
+        call :print_warning "pipx is not available in PATH. Please restart your shell and run: pipx install mdformat"
+        exit /b 0
+    )
+    
+    pipx install mdformat
+    if %errorlevel% neq 0 (
+        call :print_warning "Failed to install mdformat via pipx."
+        exit /b 0
+    )
+    
+    call :print_success "Python packages installed."
     exit /b 0
 
 :install_npm_packages
@@ -392,6 +446,7 @@ set "USER_HOME=%USERPROFILE%"
     
     call :install_system_packages
     call :install_fnm_and_node
+    call :install_python_packages
     call :install_npm_packages
     call :install_java_sdks
     call :install_kotlin_sdk
