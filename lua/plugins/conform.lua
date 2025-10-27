@@ -20,7 +20,7 @@ return {
         return nil
       else
         return {
-          timeout_ms = 500,
+          timeout_ms = 3000,
           lsp_format = 'fallback',
         }
       end
@@ -28,8 +28,12 @@ return {
     formatters_by_ft = {
       kotlin = { 'ktlint' },
       lua = { 'stylua' },
+      markdown = { 'mdformat' },
       bash = { 'shfmt' },
       sh = { 'shfmt' },
+    },
+    formatters = {
+      mdformat = { prepend_args = { '--wrap', '80' } },
     },
   },
 }
