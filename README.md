@@ -163,7 +163,7 @@ chmod +x install.sh
 ./install.sh
 ```
 
-#### Avante.nvim and Github Copilot configuration
+#### magenta.nvim and Github Copilot configuration
 
 > Note: I have decided to disable avante.nvim by default. Instead, I included
 magenta.nvim as the default AI assistant. If you want to use avante.nvim,
@@ -173,6 +173,22 @@ buggy, so I decided to disable it for now. In addition, there was some
 controversy about avante.nvim copying code from copilot without attribution a
 wile back.
 
+Github Copilot requires you to be signed in to your Github account. You can do
+this by running `:Copilot auth` in Neovim. This will open a browser window
+where you can sign in to your account. Once you are signed in, you can start
+using Copilot.
+
+Magenta.nvim is setup to work with Github Copilot by default. You can change
+the provider in the `lua/plugins/magenta.lua` file. Right now there are three
+providers set up: Gemini 2.5 Pro and Flash (Copilot), GPT-5 and GPT-5-mini
+(Copilot), and Claude 4.5 Sonnet and Claude 4.5 Haiku (Copilot). You can add
+more providers, but if you wish to use the providers directly (i.e. OpenAI),
+you will need to set up the API keys in your environment variables.
+
+See the documentation for magenta.nvim at:
+[https://github.com/dlants/magenta.nvim](https://github.com/dlants/magenta.nvim)
+
+
 ~~In this config Avante.nvim is setup to work with Github Copilot and Google
 Gemini. You can change these providers if you want (to for example Anthropic
 or OpenAI), or disable these plugins entirely.~~
@@ -180,11 +196,6 @@ or OpenAI), or disable these plugins entirely.~~
 ~~Google Gemini requires an API key to work. You can get one from the
 [Google AI Studio](https://developers.generativeai.google). Once you have the
 key, you can set it in your environment variables as `GOOGLE_API_KEY`.~~
-
-~~Github Copilot requires you to be signed in to your Github account. You can do
-this by running `:Copilot auth` in Neovim. This will open a browser window
-where you can sign in to your account. Once you are signed in, you can start
-using Copilot.~~
 
 ~~The default keybinding for using Avante.nvim is ```<leader>an``` for a new chat
 and ```<leader>aa``` to open the last chat. You can change these keybindings in
