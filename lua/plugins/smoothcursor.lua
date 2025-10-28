@@ -1,5 +1,6 @@
 return {
   'gen740/SmoothCursor.nvim',
+  enabled = false,
   lazy = false,
   config = function()
     vim.api.nvim_set_hl(0, 'SmoothCursor', { fg = '#FFD400' }) -- gold head
