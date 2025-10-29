@@ -15,6 +15,7 @@ vim.api.nvim_create_autocmd('LspAttach', {
     map('gO', require('telescope.builtin').lsp_document_symbols, 'Open Document Symbols')
     map('gW', require('telescope.builtin').lsp_dynamic_workspace_symbols, 'Open Workspace Symbols')
     map('grt', require('telescope.builtin').lsp_type_definitions, '[G]oto [T]ype Definition')
+    map('of', vim.diagnostic.open_float, '[O]pen Diagnostic [F]loat')
 
     local function client_supports(client, method, bufnr)
       if vim.fn.has 'nvim-0.11' == 1 then
