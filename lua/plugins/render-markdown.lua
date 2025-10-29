@@ -5,5 +5,11 @@ return {
     'nvim-treesitter/nvim-treesitter',
     'nvim-tree/nvim-web-devicons',
   },
-  opts = {},
+  opts = {
+    file_types = { 'markdown' },
+    -- Allow rendering in nofile buffers (needed for Magenta output)
+    exclude = {
+      buftypes = {},
+    },
+  },
 }
