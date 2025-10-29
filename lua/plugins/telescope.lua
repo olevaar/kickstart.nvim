@@ -22,7 +22,7 @@ return {
         defaults = {
           layout_strategy = 'center',
           sorting_strategy = 'ascending',
-          path_display = { 'smart' },
+          path_display = { 'filename_first' },
         },
         extensions = {
           ['ui-select'] = {
