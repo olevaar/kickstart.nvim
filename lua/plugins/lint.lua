@@ -14,7 +14,8 @@ return {
       vim.api.nvim_create_autocmd({ 'BufEnter', 'BufWritePost', 'InsertLeave' }, {
         group = lint_augroup,
         callback = function()
-          if vim.bo.modifiable then
+          local is_magenta = vim.b.magenta_input_buffer or vim.bo.filetype == 'magenta'
+          if vim.bo.modifiable and not is_magenta then
             lint.try_lint()
           end
         end,
