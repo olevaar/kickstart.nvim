@@ -49,7 +49,43 @@ local function load_env_file(path)
   return env
 end
 
-local java11 = os.getenv 'JAVA_HOME_11' or '/usr/lib/jvm/java-11-openjdk-amd64'
+local function find_java_home(version)
+  local env_var = 'JAVA_HOME_' .. version
+  local from_env = os.getenv(env_var)
+  if from_env and vim.fn.isdirectory(from_env) == 1 then
+    return from_env
+  end
+
+  local handle = io.popen 'java -version 2>&1'
+  if handle then
+    local result = handle:read '*a'
+    handle:close()
+    if result and result:match('version "' .. version) then
+      handle = io.popen 'which java 2>/dev/null'
+      if handle then
+        local java_path = handle:read '*a'
+        handle:close()
+        if java_path and java_path ~= '' then
+          handle = io.popen('readlink -f ' .. vim.fn.shellescape(java_path:gsub('\n', '')) .. ' 2>/dev/null')
+          if handle then
+            local real_path = handle:read '*a'
+            handle:close()
+            if real_path and real_path ~= '' then
+              local java_home = real_path:gsub('\n', ''):match '(.+)/bin/java$'
+              if java_home and vim.fn.isdirectory(java_home) == 1 then
+                return java_home
+              end
+            end
+          end
+        end
+      end
+    end
+  end
+
+  return '/usr/lib/jvm/java-' .. version .. '-openjdk-amd64'
+end
+
+local java11 = find_java_home '11'
 -- local java17 = os.getenv 'JAVA_HOME_17' or '/usr/lib/jvm/java-17-openjdk-amd64'
 -- local java21 = os.getenv 'JAVA_HOME_21' or '/usr/lib/jvm/java-21-openjdk-amd64'
 
