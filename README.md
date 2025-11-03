@@ -41,13 +41,20 @@ External Requirements:
 
 For the included LSPs, you need: **node ≥ 22** , **npm**, **Java JDK ≥ 21**
 
+> Note: If [mise](https://mise.jdx.dev/) is available on your system, it will be
+> used automatically to manage Node.js, Java, and Python installations instead
+> of fnm or direct system installs. This provides better version management
+> across projects.
+
 #### Ubuntu / Debian (apt)
 
 ```sh
 sudo apt update
 sudo apt install -y git curl ripgrep fd-find
-sudo apt install -y openjdk-17-jdk
 ```
+
+> Note: Java and Python will be managed by mise if available, otherwise you can
+> install them manually with `sudo apt install -y openjdk-21-jdk python3`
 
 > Note: on Debian/Ubuntu the `fd` binary is named `fdfind`. You can symlink it
 > if you like:
@@ -59,8 +66,11 @@ sudo ln -sf "$(command -v fdfind)" /usr/local/bin/fd
 #### Fedora / RHEL (dnf)
 
 ```sh
-sudo dnf install -y git curl ripgrep fd-find java-17-openjdk-devel
+sudo dnf install -y git curl ripgrep fd-find
 ```
+
+> Note: Java and Python will be managed by mise if available, otherwise you can
+> install them manually with `sudo dnf install -y java-21-openjdk-devel python3`
 
 > Fedora’s `fd` binary may be `fdfind`. Symlink if desired:
 
@@ -71,7 +81,7 @@ sudo ln -sf "$(command -v fdfind)" /usr/local/bin/fd
 #### Arch / Manjaro (pacman)
 
 ```sh
-sudo pacman -Syu --needed git curl ripgrep fd jdk-openjdk
+sudo pacman -Syu --needed git curl ripgrep fd
 ```
 
 > Arch’s `jdk-openjdk` installs the current LTS. If you specifically need 17,
@@ -81,14 +91,36 @@ sudo pacman -Syu --needed git curl ripgrep fd jdk-openjdk
 
 ```sh
 brew update
-brew install git curl ripgrep fd temurin
+brew install git curl ripgrep fd
 ```
 
-> Temurin provides an OpenJDK build. Alternatively use `brew install openjdk`.
+> Note: Java and Python will be managed by mise if available, otherwise you can
+> install them manually with `brew install temurin python3`
 
 ______________________________________________________________________
 
-### Install Node.js with `fnm` (Node ≥ 22)
+### Install Runtime Versions (Node.js, Java, Python)
+
+This configuration uses [mise](https://mise.jdx.dev/) when available to manage
+Node.js, Java, and Python versions. Mise will automatically be used if it's
+installed on your system.
+
+#### Install mise (recommended)
+
+```sh
+curl https://mise.run | sh
+```
+
+Or with Homebrew (macOS):
+
+```sh
+brew install mise
+```
+
+If mise is not available, the configuration will fall back to using `fnm` for
+Node.js and system-installed Java and Python.
+
+<details><summary>Alternative: Install Node.js with fnm (if not using mise)</summary>
 
 #### Install `fnm`
 
@@ -103,6 +135,8 @@ curl -fsSL https://fnm.vercel.app/install | bash
 ```sh
 brew install fnm
 ```
+
+</details>
 
 ### Install this configuration
 
