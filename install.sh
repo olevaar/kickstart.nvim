@@ -85,8 +85,20 @@ install_system_packages() {
   print_success "Essential system packages installed."
 }
 
-install_fnm_and_node() {
-  print_info "Installing fnm and Node.js v22..."
+install_node() {
+  print_info "Installing Node.js v22..."
+
+  if command_exists mise; then
+    print_info "mise detected. Using mise to install Node.js..."
+    if ! mise list node 2>/dev/null | grep -q "22"; then
+      mise install node@22
+    fi
+    mise use -g node@22
+    print_success "Node.js v22 installed and set as default via mise."
+    return
+  fi
+
+  print_info "mise not found. Installing fnm and Node.js v22..."
   if ! command_exists fnm; then
     curl -fsSL https://fnm.vercel.app/install | bash -s -- --skip-shell
     export PATH="$HOME/.local/share/fnm:$PATH"
@@ -153,6 +165,22 @@ setup_fnm_shell() {
   fi
 }
 
+install_python() {
+  print_info "Installing Python..."
+
+  if command_exists mise; then
+    print_info "mise detected. Using mise to install Python 3.12..."
+    if ! mise list python 2>/dev/null | grep -q "3.12"; then
+      mise install python@3.12
+    fi
+    mise use -g python@3.12
+    print_success "Python 3.12 installed and set as default via mise."
+    return
+  fi
+
+  print_info "mise not found. Python should already be installed via system packages."
+}
+
 install_python_packages() {
   print_info "Installing Python packages via pipx (mdformat)..."
   if ! command_exists pipx; then
@@ -177,6 +205,18 @@ install_npm_packages() {
 
 install_java_sdks() {
   print_info "Installing OpenJDK versions..."
+
+  if command_exists mise; then
+    print_info "mise detected. Using mise to install Java versions..."
+    for version in 11 17 21; do
+      if ! mise list java 2>/dev/null | grep -q "^java.*${version}"; then
+        mise install java@${version}
+      fi
+    done
+    mise use -g java@21
+    print_success "Java 11, 17, and 21 installed via mise (default: 21)."
+    return
+  fi
 
   _install_java_with_sdkman() {
     if [ ! -d "$HOME/.sdkman" ]; then
@@ -594,7 +634,8 @@ main() {
   print_info "Starting Neovim prerequisites installation for $OS..."
 
   install_system_packages
-  install_fnm_and_node
+  install_node
+  install_python
   install_python_packages
   install_npm_packages
   install_java_sdks
