@@ -53,8 +53,12 @@ sudo apt update
 sudo apt install -y git curl ripgrep fd-find
 ```
 
+<!-- markdownlint-disable-next-line MD028 -->
+
 > Note: Java and Python will be managed by mise if available, otherwise you can
 > install them manually with `sudo apt install -y openjdk-21-jdk python3`
+
+<!-- markdownlint-disable-next-line MD028 -->
 
 > Note: on Debian/Ubuntu the `fd` binary is named `fdfind`. You can symlink it
 > if you like:
@@ -71,7 +75,6 @@ sudo dnf install -y git curl ripgrep fd-find
 
 > Note: Java and Python will be managed by mise if available, otherwise you can
 > install them manually with `sudo dnf install -y java-21-openjdk-devel python3`
-
 > Fedora’s `fd` binary may be `fdfind`. Symlink if desired:
 
 ```sh
@@ -119,6 +122,8 @@ brew install mise
 
 If mise is not available, the configuration will fall back to using `fnm` for
 Node.js and system-installed Java and Python.
+
+<!-- markdownlint-disable MD033 -->
 
 <details><summary>Alternative: Install Node.js with fnm (if not using mise)</summary>
 
