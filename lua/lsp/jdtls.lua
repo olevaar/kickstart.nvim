@@ -145,7 +145,7 @@ local function start_for_root(root, opts)
 end
 
 function M.start_from_cwd(opts)
-  local cwd = vim.loop.cwd()
+  local cwd = vim.uv.cwd()
   if not cwd or cwd == '' then
     return
   end
@@ -168,7 +168,7 @@ function M.start_for_current_buffer(opts)
   local bufname = vim.api.nvim_buf_get_name(0)
   local dir
   if bufname == '' then
-    dir = vim.loop.cwd()
+    dir = vim.uv.cwd()
   else
     local stat = vim.uv.fs_stat(bufname)
     dir = (stat and stat.type == 'directory') and bufname or vim.fs.dirname(bufname)
