@@ -15,6 +15,8 @@ M.keymaps = {
   { 'n', '<C-k>', '<C-w><C-k>', { desc = 'Move focus to the upper window' } },
   { 'n', '<leader>rn', vim.lsp.buf.rename, { desc = '[R]e[n]ame' } },
   { { 'n', 'x' }, '<leader>ca', vim.lsp.buf.code_action, { desc = 'Code [A]ction' } },
+  { 'n', '<leader>dh', ':diffget //2<CR>', { desc = 'Diff get from left (//2)' } },
+  { 'n', '<leader>dl', ':diffget //3<CR>', { desc = 'Diff get from right (//3)' } },
 }
 
 return M
