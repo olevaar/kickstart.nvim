@@ -20,7 +20,7 @@ vim.o.cursorline = true
 vim.o.scrolloff = 10
 vim.o.confirm = true
 
-vim.o.guifont = 'UbuntuMono Nerd Font:h12'
+vim.o.guifont = 'UbuntuMono Nerd Font:h14'
 
 vim.diagnostic.config {
   virtual_text = {
