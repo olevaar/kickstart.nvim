@@ -62,7 +62,6 @@ function M.config()
 
   local capabilities = require('cmp_nvim_lsp').default_capabilities()
 
-  -- Include debug/test bundles so jdtls exposes startDebugSession capability
   local bundles = {}
   local debug_bundle = vim.fn.glob(mason_path .. '/packages/java-debug-adapter/extension/server/com.microsoft.java.debug.plugin-*.jar')
   if debug_bundle ~= '' then
