@@ -12,14 +12,14 @@ function M.config()
   local mason_path = vim.fn.stdpath 'data' .. '/mason'
   local jdtls_root = mason_path .. '/packages/jdtls'
 
-  local lombok_jar = mason_path .. 'lombok.jar'
+  local lombok_jar = jdtls_root .. '/lombok.jar'
 
   local launcher_jar = (function()
-    local matches = vim.fn.glob(mason_path .. '/plugins/org.eclipse.equinox.launcher_*.jar', true, true)
+    local matches = vim.fn.glob(jdtls_root .. '/plugins/org.eclipse.equinox.launcher_*.jar', true, true)
     if type(matches) == 'table' and #matches > 0 then
       return matches[1]
     else
-      return mason_path .. '/plugins/org.eclipse.equinox.launcher.jar'
+      return jdtls_root .. '/plugins/org.eclipse.equinox.launcher.jar'
     end
   end)()
 
@@ -37,7 +37,7 @@ function M.config()
     'java',
     '-Declipse.application=org.eclipse.jdt.ls.core.id1',
     '-Dosgi.bundles.defaultStartLevel=4',
-    'Declipse.product=org.eclipse.jdt.ls.core.product',
+    '-Declipse.product=org.eclipse.jdt.ls.core.product',
     '-Dlog.protocol=true',
     '-Dlog.level=ALL',
     '--add-modules=ALL-SYSTEM',
