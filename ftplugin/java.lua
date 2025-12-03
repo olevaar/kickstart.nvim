@@ -5,3 +5,7 @@ vim.opt_local.tabstop = 4
 
 vim.opt_local.autoindent = true
 vim.opt_local.smartindent = true
+
+pcall(function()
+  require('lsp.jdtls').start()
+end)

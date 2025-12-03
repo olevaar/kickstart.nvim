@@ -1,73 +1,70 @@
 local M = {}
 
-local mason = vim.fn.stdpath 'data' .. '/mason/packages/jdtls'
-
-local function find_launcher()
-  local matches = vim.fn.glob(mason .. '/plugins/org.eclipse.equinox.launcher_*.jar', true, true)
-  if type(matches) == 'table' and #matches > 0 then
-    return matches[1]
+function M.config()
+  local jdtls_ok, jdtls = pcall(require, 'jdtls')
+  if not jdtls_ok then
+    return nil
   end
-  return mason .. '/plugins/org.eclipse.equinox.launcher.jar'
-end
 
-local function jdtls_config_dir()
-  local sys = (vim.loop.os_uname().sysname or ''):lower()
-  if sys:find 'darwin' then
-    return mason .. '/config_mac'
-  end
-  if sys:find 'windows' or sys:find 'mingw' then
-    return mason .. '/config_win'
-  end
-  return mason .. '/config_linux'
-end
+  local project_name = vim.fn.fnamemodify(vim.fn.getcwd(), ':p:h:t')
+  local workspace_dir = vim.fn.stdpath 'data' .. '/jdtls-workspaces/' .. project_name
 
-local function workspace_dir(root)
-  local base = vim.fn.stdpath 'data' .. '/jdtls_workspaces'
-  return base .. '/' .. vim.fs.basename(root)
-end
+  local mason_path = vim.fn.stdpath 'data' .. '/mason'
+  local jdtls_root = mason_path .. '/packages/jdtls'
 
-function M.build(root, opts)
-  opts = opts or {}
-  local LOMBOK_JAR = mason .. '/lombok.jar'
-  local JDTLS_JAR = find_launcher()
-  local JDTLS_CFG = jdtls_config_dir()
+  local os_config = (function()
+    if vim.fn.has 'mac' == 1 then
+      return 'config_mac'
+    elseif vim.fn.has 'win32' == 1 then
+      return 'config_win'
+    else
+      return 'config_linux'
+    end
+  end)()
 
   local cmd = {
-    'java',
-    '-Declipse.application=org.eclipse.jdt.ls.core.id1',
-    '-Dosgi.bundles.defaultStartLevel=4',
-    '-Declipse.product=org.eclipse.jdt.ls.core.product',
-    '-Dlog.protocol=true',
-    '-Dlog.level=ALL',
-    '--add-modules=ALL-SYSTEM',
-    '--add-opens',
-    'java.base/java.util=ALL-UNNAMED',
-    '--add-opens',
-    'java.base/java.lang=ALL-UNNAMED',
-    '-javaagent:' .. LOMBOK_JAR,
-    '-jar',
-    JDTLS_JAR,
-    '-configuration',
-    JDTLS_CFG,
+    jdtls_root .. '/bin/jdtls',
     '-data',
-    workspace_dir(root),
+    workspace_dir,
+    '--jvm-args',
+    '-Xms512m',
   }
 
-  local settings = vim.tbl_deep_extend('force', {
-    java = {
-      configuration = { updateBuildConfiguration = 'interactive' },
-      maven = { downloadSources = true },
-      format = { enabled = true },
-      autobuild = { enabled = true },
-    },
-  }, opts.settings or {})
+  local root_markers = { '.git', 'mvnw', 'gradlew', 'pom.xml', 'build.gradle' }
+  local root_dir = require('jdtls.setup').find_root(root_markers)
+  if root_dir == nil then
+    root_dir = vim.fn.getcwd()
+  end
+
+  local capabilities = require('cmp_nvim_lsp').default_capabilities()
+
+  -- Include debug/test bundles so jdtls exposes startDebugSession capability
+  local bundles = {}
+  local debug_bundle = vim.fn.glob(mason_path .. '/packages/java-debug-adapter/extension/server/com.microsoft.java.debug.plugin-*.jar')
+  if debug_bundle ~= '' then
+    table.insert(bundles, debug_bundle)
+  end
+  local test_bundles = vim.split(vim.fn.glob(mason_path .. '/packages/java-test/extension/server/*.jar'), '\n')
+  for _, b in ipairs(test_bundles) do
+    if b ~= '' then
+      table.insert(bundles, b)
+    end
+  end
 
   return {
     cmd = cmd,
-    root_dir = root,
-    settings = settings,
-    init_options = { bundles = opts.extra_bundles or {} },
-    on_attach = opts.on_attach,
+    root_dir = root_dir,
+    capabilities = capabilities,
+    settings = {
+      java = {
+        signatureHelp = { enabled = true },
+        contentProvider = { preferred = 'fernflower' },
+      },
+    },
+    init_options = {
+      workspace = workspace_dir,
+      bundles = bundles,
+    },
   }
 end
 

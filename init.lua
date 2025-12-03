@@ -71,17 +71,6 @@ if not (vim.uv or vim.loop).fs_stat(lazypath) then
   end
 end
 
-vim.api.nvim_create_augroup('jdtls_project_autostart', { clear = true })
-vim.api.nvim_create_autocmd({ 'VimEnter', 'DirChanged' }, {
-  group = 'jdtls_project_autostart',
-  callback = function()
-    require('lsp.jdtls').start_from_cwd {
-      skip_kotlin_only = true,
-      config_opts = {},
-    }
-  end,
-})
-
 vim.opt.tabstop = 2
 vim.opt.shiftwidth = 2
 vim.opt.expandtab = true
