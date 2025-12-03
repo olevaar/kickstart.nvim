@@ -39,6 +39,9 @@ vim.g.terminal_color_13 = '#F5C2E7'
 vim.g.terminal_color_14 = '#94E2D5'
 vim.g.terminal_color_15 = '#A6ADC8'
 
+vim.o.exrc = true
+vim.o.secure = true
+
 vim.diagnostic.config {
   virtual_text = {
     wrap = true,
