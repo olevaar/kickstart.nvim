@@ -589,6 +589,8 @@ install_nvim_packages() {
       'typescript-language-server',
       'angular-language-server',
       'jdtls',
+      'java-debug-adapter',
+      'java-test',
       'eslint_d',
       'prettierd',
       'prettier',
