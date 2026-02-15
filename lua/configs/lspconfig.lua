@@ -97,6 +97,25 @@ local servers = {
       },
     },
   },
+  eslint = {
+    settings = {
+      -- Use project-local eslint and Angular config if present
+      workingDirectories = { { mode = 'auto' } },
+      format = { enable = true },
+      codeAction = {
+        disableRuleComment = {
+          enable = true,
+          location = 'separateLine',
+        },
+        showDocumentation = {
+          enable = true,
+        },
+      },
+      -- Enable using the flat config if your project uses eslint.config.js
+      experimental = { useFlatConfig = true },
+    },
+    filetypes = { 'javascript', 'javascriptreact', 'typescript', 'typescriptreact' },
+  },
 }
 local ensure_installed = vim.tbl_keys(servers or {})
 vim.list_extend(ensure_installed, {
@@ -105,6 +124,7 @@ vim.list_extend(ensure_installed, {
   'html',
   'ts_ls',
   'angularls',
+  'eslint-lsp',
   'ktlint',
   'shfmt',
   'jdtls',
