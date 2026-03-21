@@ -1,6 +1,7 @@
 return {
   'dlants/magenta.nvim',
   lazy = false,
+  enabled = false,
   build = 'npm ci',
   opts = {
     profiles = {
