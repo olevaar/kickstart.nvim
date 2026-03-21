@@ -39,10 +39,10 @@ External Requirements:
   - If you want to write Golang, you will need `go`
   - etc.
 
-For the included LSPs, you need: **node ≥ 22** , **npm**, **Java JDK ≥ 21**
+For the included LSPs, you need: **node ≥ 22** , **npm**, **Java JDK ≥ 21**, **Go ≥ 1.22**
 
 > Note: If [mise](https://mise.jdx.dev/) is available on your system, it will be
-> used automatically to manage Node.js, Java, and Python installations instead
+> used automatically to manage Node.js, Java, Python, and Go installations instead
 > of fnm or direct system installs. This provides better version management
 > across projects.
 
@@ -202,40 +202,28 @@ chmod +x install.sh
 ./install.sh
 ```
 
-#### magenta.nvim and Github Copilot configuration
+#### sidekick.nvim and Github Copilot configuration
 
-> Note: I have decided to disable avante.nvim by default. Instead, I included
-> magenta.nvim as the default AI assistant. If you want to use avante.nvim, you
-> will need to enable it in the `lua/plugins/avante.lua` file by setting
-> `enabled = true`. I found the copilot integration with avante.nvim to be a bit
-> buggy, so I decided to disable it for now. In addition, there was some
-> controversy about avante.nvim copying code from copilot without attribution a
-> wile back.
+> Note: I have decided to disable avante.nvim and magenta.nvim by default.
+> Instead, I included [sidekick.nvim](https://github.com/folke/sidekick.nvim) as
+> the primary AI assistant. Sidekick provides a powerful CLI interface for AI
+> interactions and integrates seamlessly with your codebase.
 
 Github Copilot requires you to be signed in to your Github account. You can do
-this by running `:Copilot auth` in Neovim. This will open a browser window where
-you can sign in to your account. Once you are signed in, you can start using
-Copilot.
+this by running `:Copilot auth` in Neovim. Once you are signed in, you can start
+using Copilot as the backend for your AI tasks.
 
-Magenta.nvim is setup to work with Github Copilot by default. You can change the
-provider in the `lua/plugins/magenta.lua` file. Right now there are three
-providers set up: Gemini 2.5 Pro and Flash (Copilot), GPT-5 and GPT-5-mini
-(Copilot), and Claude 4.5 Sonnet and Claude 4.5 Haiku (Copilot). You can add
-more providers, but if you wish to use the providers directly (i.e. OpenAI), you
-will need to set up the API keys in your environment variables.
+Sidekick.nvim is configured with several helpful keybindings:
 
-See the documentation for magenta.nvim at:
-[https://github.com/dlants/magenta.nvim](https://github.com/dlants/magenta.nvim)
+- `<tab>`: Jump to or apply the next edit suggestion.
+- `<leader>aa`: Toggle the Sidekick CLI.
+- `<leader>as`: Select a CLI tool.
+- `<leader>ad`: Detach a CLI session.
+- `<leader>at`: Send "this" (contextual element) to the CLI.
+- `<leader>af`: Send the entire current file to the CLI.
+- `<leader>av`: Send the current visual selection to the CLI.
+- `<leader>ap`: Open the Sidekick prompt selector.
 
-~~In this config Avante.nvim is setup to work with Github Copilot and Google
-Gemini. You can change these providers if you want (to for example Anthropic or
-OpenAI), or disable these plugins entirely.~~
+See the documentation for sidekick.nvim at:
+[https://github.com/folke/sidekick.nvim](https://github.com/folke/sidekick.nvim)
 
-~~Google Gemini requires an API key to work. You can get one from the
-[Google AI Studio](https://developers.generativeai.google). Once you have the
-key, you can set it in your environment variables as `GOOGLE_API_KEY`.~~
-
-~~The default keybinding for using Avante.nvim is `<leader>an` for a new chat
-and `<leader>aa` to open the last chat. You can change these keybindings in the
-`lua/plugins/avante.lua` file. `<leader>ap` is used to toggle between
-providers.~~
