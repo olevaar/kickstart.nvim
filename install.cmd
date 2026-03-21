@@ -192,6 +192,16 @@ set "USER_HOME=%USERPROFILE%"
     call :print_success "Global npm packages installed."
     exit /b 0
 
+:install_go
+    call :print_info "Installing Go..."
+    winget install --id GoLang.Go -e --accept-source-agreements --accept-package-agreements
+    if %errorlevel% neq 0 (
+        call :print_warning "Go installation failed or was skipped."
+    ) else (
+        call :print_success "Go installed."
+    )
+    exit /b 0
+
 :install_java_sdks
     call :print_info "Installing OpenJDK versions..."
     winget install --id Microsoft.OpenJDK.11 -e --accept-source-agreements --accept-package-agreements
@@ -448,6 +458,7 @@ set "USER_HOME=%USERPROFILE%"
     call :install_fnm_and_node
     call :install_python_packages
     call :install_npm_packages
+    call :install_go
     call :install_java_sdks
     call :install_kotlin_sdk
     call :install_kotlin_lsp

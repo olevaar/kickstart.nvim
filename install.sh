@@ -203,6 +203,72 @@ install_npm_packages() {
   print_success "Global npm packages installed."
 }
 
+install_go() {
+  print_info "Installing Go..."
+
+  if command_exists mise; then
+    print_info "mise detected. Using mise to install Go..."
+    if ! mise list go 2>/dev/null | grep -q "1\."; then
+      mise install go@latest
+    fi
+    mise use -g go@latest
+    print_success "Go installed and set as default via mise."
+    return
+  fi
+
+  case "$OS" in
+  "linux")
+    check_sudo
+    local arch_name=""
+    case "$(uname -m)" in
+      x86_64) arch_name="amd64" ;;
+      aarch64) arch_name="arm64" ;;
+      *) print_error "Unsupported architecture for Go: $(uname -m)" ;;
+    esac
+
+    print_info "Fetching latest Go version..."
+    local latest_go_version
+    latest_go_version=$(curl -sL "https://go.dev/VERSION?m=text" | head -n 1)
+    if [ -z "$latest_go_version" ]; then
+      print_error "Failed to fetch latest Go version."
+    fi
+
+    local go_tarball="${latest_go_version}.linux-${arch_name}.tar.gz"
+    local go_url="https://go.dev/dl/${go_tarball}"
+
+    print_info "Downloading ${go_tarball}..."
+    local original_dir="$PWD"
+    cd /tmp || print_error "Failed to change directory to /tmp"
+    if ! curl -fLo "$go_tarball" "$go_url"; then
+      cd "$original_dir"
+      print_error "Failed to download Go from ${go_url}"
+    fi
+
+    print_info "Extracting Go to /usr/local..."
+    sudo rm -rf /usr/local/go
+    if ! sudo tar -C /usr/local -xzf "$go_tarball"; then
+      cd "$original_dir"
+      print_error "Failed to extract Go tarball."
+    fi
+
+    rm -f "$go_tarball"
+    cd "$original_dir"
+    
+    if [[ ":$PATH:" != *":/usr/local/go/bin:"* ]]; then
+      print_warning "Make sure /usr/local/go/bin is in your PATH."
+      print_info "Add this to your shell profile: export PATH=\"/usr/local/go/bin:\$PATH\""
+    fi
+    ;;
+  "macos")
+    if ! command_exists brew; then
+      print_error "Homebrew not found. Please install Homebrew first."
+    fi
+    brew install go
+    ;;
+  esac
+  print_success "Go installed."
+}
+
 install_java_sdks() {
   print_info "Installing OpenJDK versions..."
 
@@ -640,6 +706,7 @@ main() {
   install_python
   install_python_packages
   install_npm_packages
+  install_go
   install_java_sdks
   install_kotlin_sdk
   install_kotlin_lsp
