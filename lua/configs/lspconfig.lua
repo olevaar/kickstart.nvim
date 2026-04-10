@@ -97,26 +97,8 @@ local servers = {
       },
     },
   },
-  eslint = {
-    settings = {
-      -- Use project-local eslint and Angular config if present
-      workingDirectories = { { mode = 'auto' } },
-      format = { enable = true },
-      codeAction = {
-        disableRuleComment = {
-          enable = true,
-          location = 'separateLine',
-        },
-        showDocumentation = {
-          enable = true,
-        },
-      },
-      -- Enable using the flat config if your project uses eslint.config.js
-      experimental = { useFlatConfig = true },
-    },
-    filetypes = { 'javascript', 'javascriptreact', 'typescript', 'typescriptreact' },
-  },
 }
+
 local ensure_installed = vim.tbl_keys(servers or {})
 vim.list_extend(ensure_installed, {
   'stylua',
@@ -147,4 +129,23 @@ require('mason-lspconfig').setup {
 vim.lsp.config('kotlin_language_server', {
   cmd = { os.getenv 'HOME' .. '/bin/kotlin-lsp.sh' },
   filetypes = { 'kotlin', 'kts' },
+})
+
+vim.lsp.config('eslint', {
+  cmd = {
+    'node',
+    '--max-old-space-size=8192',
+    vim.fn.stdpath 'data' .. '/mason/packages/eslint-lsp/node_modules/vscode-langservers-extracted/bin/vscode-eslint-language-server',
+    '--stdio',
+  },
+  capabilities = capabilities,
+  settings = {
+    workingDirectories = { { mode = 'auto' } },
+    format = { enable = true },
+    codeAction = {
+      disableRuleComment = { enable = true, location = 'separateLine' },
+      showDocumentation = { enable = true },
+    },
+  },
+  filetypes = { 'javascript', 'javascriptreact', 'typescript', 'typescriptreact' },
 })
