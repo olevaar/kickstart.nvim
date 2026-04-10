@@ -1,3 +1,5 @@
+vim.env.OPENCODE_THEME = 'catppuccin'
+
 vim.g.mapleader = ' '
 vim.g.maplocalleader = ' '
 vim.g.have_nerd_font = true
@@ -19,6 +21,7 @@ vim.o.inccommand = 'split'
 vim.o.cursorline = true
 vim.o.scrolloff = 10
 vim.o.confirm = true
+vim.o.swapfile = false
 
 vim.o.guifont = 'UbuntuMono Nerd Font:h14'
 
