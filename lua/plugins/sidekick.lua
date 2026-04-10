@@ -1,5 +1,15 @@
 return {
   'folke/sidekick.nvim',
+  opts = {
+    cli = {
+      tools = {
+        copilot = {
+          -- override the default command used to start the tool
+          cmd = { 'copilot', '--alt-screen' },
+        },
+      },
+    },
+  },
   keys = {
     {
       '<tab>',
