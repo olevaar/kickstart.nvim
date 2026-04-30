@@ -371,7 +371,57 @@ install_kotlin_lsp() {
       print_error "gradlew not found in kotlin-language-server repository."
     fi
 
+    print_info "Temporarily setting Java 11 for gradlew..."
+    local original_java_home="$JAVA_HOME"
+    local java_manager="javahome"
+
+    if command_exists mise; then
+      java_manager="mise"
+      mise use java@11
+    elif [ -f "$HOME/.sdkman/bin/sdkman-init.sh" ]; then
+      source "$HOME/.sdkman/bin/sdkman-init.sh"
+      if sdk list java 2>/dev/null | grep -q "11\.0\.23-tem"; then
+        java_manager="sdkman"
+        sdk use java 11.0.23-tem
+      fi
+    fi
+    
+    if [ "$java_manager" = "javahome" ]; then
+      if [ "$OS" = "macos" ] && command_exists /usr/libexec/java_home; then
+        export JAVA_HOME=$(/usr/libexec/java_home -v 11 2>/dev/null)
+      elif [ -d "/usr/lib/jvm/java-11-openjdk-amd64" ]; then
+        export JAVA_HOME="/usr/lib/jvm/java-11-openjdk-amd64"
+      elif [ -d "/usr/lib/jvm/java-11-openjdk-arm64" ]; then
+        export JAVA_HOME="/usr/lib/jvm/java-11-openjdk-arm64"
+      elif command_exists apt-get; then
+        check_sudo
+        sudo update-java-alternatives -s java-1.11.0-openjdk-amd64 2>/dev/null || sudo update-java-alternatives -s java-1.11.0-openjdk-arm64 2>/dev/null || true
+        java_manager="apt"
+      fi
+    fi
+
+    local gradlew_failed=false
     if ! ./gradlew :server:installDist; then
+      gradlew_failed=true
+    fi
+
+    print_info "Reverting Java back to the highest version (Java 21)..."
+    if [ "$java_manager" = "mise" ]; then
+      mise use java@21
+    elif [ "$java_manager" = "sdkman" ]; then
+      sdk use java 21.0.3-tem
+    elif [ "$java_manager" = "javahome" ]; then
+      if [ -n "$original_java_home" ]; then
+        export JAVA_HOME="$original_java_home"
+      else
+        unset JAVA_HOME
+      fi
+    elif [ "$java_manager" = "apt" ]; then
+      check_sudo
+      sudo update-java-alternatives -s java-1.21.0-openjdk-amd64 2>/dev/null || sudo update-java-alternatives -s java-1.21.0-openjdk-arm64 2>/dev/null || true
+    fi
+
+    if [ "$gradlew_failed" = true ]; then
       cd "$original_dir"
       print_error "Failed to build kotlin-language-server."
     fi
