@@ -2,6 +2,11 @@ return {
   'folke/sidekick.nvim',
   opts = {
     cli = {
+      win = {
+        split = {
+          width = 120,
+        },
+      },
       tools = {
         copilot = {
           -- override the default command used to start the tool
