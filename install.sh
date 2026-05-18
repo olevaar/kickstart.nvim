@@ -221,9 +221,9 @@ install_go() {
     check_sudo
     local arch_name=""
     case "$(uname -m)" in
-      x86_64) arch_name="amd64" ;;
-      aarch64) arch_name="arm64" ;;
-      *) print_error "Unsupported architecture for Go: $(uname -m)" ;;
+    x86_64) arch_name="amd64" ;;
+    aarch64) arch_name="arm64" ;;
+    *) print_error "Unsupported architecture for Go: $(uname -m)" ;;
     esac
 
     print_info "Fetching latest Go version..."
@@ -253,7 +253,7 @@ install_go() {
 
     rm -f "$go_tarball"
     cd "$original_dir"
-    
+
     if [[ ":$PATH:" != *":/usr/local/go/bin:"* ]]; then
       print_warning "Make sure /usr/local/go/bin is in your PATH."
       print_info "Add this to your shell profile: export PATH=\"/usr/local/go/bin:\$PATH\""
@@ -385,7 +385,7 @@ install_kotlin_lsp() {
         sdk use java 11.0.23-tem
       fi
     fi
-    
+
     if [ "$java_manager" = "javahome" ]; then
       if [ "$OS" = "macos" ] && command_exists /usr/libexec/java_home; then
         export JAVA_HOME=$(/usr/libexec/java_home -v 11 2>/dev/null)
