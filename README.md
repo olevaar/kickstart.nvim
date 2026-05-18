@@ -204,13 +204,15 @@ chmod +x install.sh
 
 #### nvim-redraft and Gemini Configuration
 
-I have also included `nvim-redraft` for fast, inline AI-powered code editing. It is configured to hijack the OpenAI provider to use Gemini via the Google Generative AI OpenAI-compatible endpoint (`gemini-2.5-flash`).
+I have also included `nvim-redraft` for fast, inline AI-powered code editing. It is configured to support multiple providers:
+- **Gemini 2.5 Flash** (via OpenAI-compatible endpoint)
+- **GitHub Copilot** (GPT-4o)
 
 **Keybindings:**
 - `<leader>ae` (Visual mode): AI Edit Selection. Select code, press this, and enter an instruction.
-- `<leader>am` (Normal mode): Select AI Model.
+- `<leader>am` (Normal mode): Select AI Model. This allows you to switch between Gemini and Copilot.
 
-**Important:** Because `nvim-redraft` is configured to use the OpenAI compatible endpoint for Gemini, you **must** export your Gemini API key as the `OPENAI_API_KEY` environment variable in your shell for the plugin to work:
+**Important:** Because `nvim-redraft` is configured to use the OpenAI compatible endpoint for Gemini, you **must** export your Gemini API key as the `OPENAI_API_KEY` environment variable in your shell for the Gemini provider to work:
 
 ```sh
 export OPENAI_API_KEY="your-gemini-api-key"
