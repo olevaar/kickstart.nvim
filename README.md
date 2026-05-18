@@ -202,6 +202,56 @@ chmod +x install.sh
 ./install.sh
 ```
 
+#### nvim-redraft and Gemini Configuration
+
+I have also included `nvim-redraft` for fast, inline AI-powered code editing. It is configured to hijack the OpenAI provider to use Gemini via the Google Generative AI OpenAI-compatible endpoint (`gemini-2.5-flash`).
+
+**Keybindings:**
+- `<leader>ae` (Visual mode): AI Edit Selection. Select code, press this, and enter an instruction.
+- `<leader>am` (Normal mode): Select AI Model.
+
+**Important:** Because `nvim-redraft` is configured to use the OpenAI compatible endpoint for Gemini, you **must** export your Gemini API key as the `OPENAI_API_KEY` environment variable in your shell for the plugin to work:
+
+```sh
+export OPENAI_API_KEY="your-gemini-api-key"
+```
+
+##### Patching the TypeScript Backend
+
+Because `nvim-redraft` uses the Vercel AI SDK, it currently does not pass the custom `baseURL` correctly to the underlying provider, and the default fallback routing fails when hitting the Gemini endpoint. To fix this, you must apply a patch to the locally installed TypeScript source. If the plugin updates, you may need to re-apply this patch.
+
+Run the following script to patch the file and rebuild the service:
+
+```bash
+cat << 'EOF' > patch_redraft.sh
+#!/bin/bash
+LLM_TS=~/.local/share/nvim/lazy/nvim-redraft/ts/src/llm.ts
+
+if [ -f "$LLM_TS" ]; then
+  # 1. Add baseURL to BaseLLMProvider constructor
+  sed -i 's/protected maxOutputTokens: number;/protected maxOutputTokens: number;\n  protected baseURL?: string;/g' $LLM_TS
+  sed -i 's/constructor(apiKey: string, model: string, maxOutputTokens?: number) {/constructor(apiKey: string, model: string, maxOutputTokens?: number, baseURL?: string) {/g' $LLM_TS
+  sed -i 's/this.maxOutputTokens = maxOutputTokens || 4096;/this.maxOutputTokens = maxOutputTokens || 4096;\n    this.baseURL = baseURL;/g' $LLM_TS
+  
+  # 2. Update OpenAIProvider to use baseURL
+  sed -i 's/return createOpenAI({ apiKey: this.apiKey });/return createOpenAI({ apiKey: this.apiKey, baseURL: this.baseURL });/g' $LLM_TS
+
+  # 3. Update PROVIDERS registry mapping to pass baseURL to the constructor
+  sed -i 's/new OpenAIProvider(apiKey, model, maxOutputTokens)/new OpenAIProvider(apiKey, model, maxOutputTokens, baseURL)/g' $LLM_TS
+
+  # 4. Force the AI SDK to use the .chat endpoint
+  sed -i "s/model: provider(this.model),/model: typeof provider.chat === 'function' ? provider.chat(this.model) : provider(this.model),/g" $LLM_TS
+
+  echo "Patched $LLM_TS"
+  cd ~/.local/share/nvim/lazy/nvim-redraft/ts && npm install && npm run build
+else
+  echo "File not found: $LLM_TS"
+fi
+EOF
+chmod +x patch_redraft.sh && ./patch_redraft.sh
+rm patch_redraft.sh
+```
+
 #### sidekick.nvim and Github Copilot configuration
 
 > Note: I have decided to disable avante.nvim and magenta.nvim by default.
