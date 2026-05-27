@@ -12,20 +12,33 @@ return {
       models = {
         {
           provider = 'openai',
-          model = 'gemini-2.5-flash',
-          label = 'Gemini 2.5 Flash',
+          model = 'gemini-3.1-pro-preview',
+          label = 'Gemini 3.1 Pro',
         },
         {
           provider = 'copilot',
-          model = 'gpt-4o',
-          label = 'GitHub Copilot (GPT-4o)',
+          model = 'gpt-5.2',
+          label = 'GitHub Copilot (GPT 5.2)',
         },
       },
       default_model_index = 1,
     },
     keys = {
-      { '<leader>ae', function() require('nvim-redraft').edit() end, mode = 'v', desc = 'AI Edit Selection' },
-      { '<leader>am', function() require('nvim-redraft').select_model() end, desc = 'Select AI Model' },
+      {
+        '<leader>ae',
+        function()
+          require('nvim-redraft').edit()
+        end,
+        mode = 'v',
+        desc = 'AI Edit Selection',
+      },
+      {
+        '<leader>am',
+        function()
+          require('nvim-redraft').select_model()
+        end,
+        desc = 'Select AI Model',
+      },
     },
   },
 }
