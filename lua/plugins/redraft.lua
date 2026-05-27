@@ -5,7 +5,7 @@ return {
   opts = {
     -- AI edits appear as conflict markers for review
     diff_mode = true,
-    debug = true,
+    debug = false,
     llm = {
       -- Note: base_url is applied to the OpenAI provider globally in the current plugin version
       base_url = 'https://generativelanguage.googleapis.com/v1beta/openai/',
