@@ -9,8 +9,6 @@ return {
     'jay-babu/mason-nvim-dap.nvim',
 
     'leoluz/nvim-dap-go',
-
-    { 'Mgenuit/nvim-dap-kotlin', ft = 'kotlin' },
   },
   keys = {
     {
@@ -79,7 +77,6 @@ return {
       handlers = {},
       ensure_installed = {
         'delve',
-        'kotlin-debug-adapter',
       },
     }
 
@@ -109,19 +106,6 @@ return {
     }
 
     pcall(require, 'debug.java')
-
-    vim.api.nvim_create_autocmd('FileType', {
-      pattern = 'kotlin',
-      callback = function()
-        local ok, dap_kotlin = pcall(require, 'dap-kotlin')
-        if not ok then
-          return
-        end
-        dap.configurations.kotlin = dap.configurations.kotlin or {}
-        dap_kotlin.setup {
-          dap = dap,
-        }
-      end,
-    })
+    require('debug.kotlin').setup_dap(dap)
   end,
 }

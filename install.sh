@@ -49,7 +49,9 @@ PYTHON_MIN=3.9.0 PYTHON_MISE="python@3.12"
 GO_MIN=1.22.0 GO_MISE="go@1"
 JAVA_MIN=21.0.0 JAVA_MISE="java@temurin-21"
 KOTLIN_MIN=1.9.0 KOTLIN_MISE="kotlin@2"
-KLS_MISE="github:fwcd/kotlin-language-server@1.3"
+# JetBrains' official Kotlin LSP (bundles its own JRE). Mason's package
+# currently points at a dead download host, so it is installed through mise.
+KOTLIN_LSP_MIN=263.0.0 KOTLIN_LSP_VERSION=263.7084.0
 RG_MIN=13.0.0 RG_MISE="ripgrep@15"
 FD_MIN=8.0.0 FD_MISE="fd@10"
 TS_MIN=0.26.1 TS_MISE="tree-sitter@0.27"
@@ -181,23 +183,26 @@ check_tool() {
 install_tool() {
   local label=$1 min=$2 spec=$3 ver
   shift 3
-  info "Installing $label via mise ($spec)..."
+  # Display form without backend options: "http:x[url=...]@1" -> "http:x@1".
+  local name="$spec"
+  case "$spec" in *\[*) name="${spec%%\[*}@${spec##*@}" ;; esac
+  info "Installing $label via mise ($name)..."
   if ! mise_use "$spec"; then
     warn "mise failed to install $spec"
     fail "$label"
     return 0
   fi
   if [ "$DRY_RUN" = 1 ]; then
-    record "$label" "would install via mise ($spec)"
+    record "$label" "would install via mise ($name)"
     return 0
   fi
   if [ -z "$min" ] || [ "$min" = 0 ]; then
     if command_exists "$1"; then
-      record "$label" "installed via mise ($spec)"
+      record "$label" "installed via mise ($name)"
       return 0
     fi
   elif ver=$(tool_version "$@") && version_ge "$ver" "$min"; then
-    record "$label" "installed $ver via mise ($spec)"
+    record "$label" "installed $ver via mise ($name)"
     return 0
   fi
   warn "$label was installed by mise but '$1' is still not usable on PATH"
@@ -380,6 +385,25 @@ setup_mise_activation() {
 
 # --- Tools --------------------------------------------------------------------
 
+# Prints the mise spec for JetBrains' Kotlin LSP archive on this platform.
+kotlin_lsp_spec() {
+  local v=$KOTLIN_LSP_VERSION suffix="" ext=tar.gz url
+  case "$OS-$(uname -m)" in
+  linux-x86_64) ;;
+  linux-aarch64 | linux-arm64) suffix=-aarch64 ;;
+  macos-x86_64) ext=sit ;;
+  macos-arm64) suffix=-aarch64 ext=sit ;;
+  *) return 1 ;;
+  esac
+  url="https://download.jetbrains.com/language-server/kotlin-server/$v/kotlin-server-$v$suffix.$ext"
+  # The macOS .sit archives are zip files.
+  if [ "$ext" = sit ]; then
+    echo "http:kotlin-lsp[url=$url,checksum_url=$url.sha256,format=zip]@$v"
+  else
+    echo "http:kotlin-lsp[url=$url,checksum_url=$url.sha256]@$v"
+  fi
+}
+
 install_tools() {
   ensure_tool "Neovim" "$NVIM_MIN" "$NVIM_MISE" nvim --version
 
@@ -392,7 +416,14 @@ install_tools() {
   ensure_tool "Go" "$GO_MIN" "$GO_MISE" go version
   ensure_tool "Java" "$JAVA_MIN" "$JAVA_MISE" java -version
   ensure_tool "Kotlin" "$KOTLIN_MIN" "$KOTLIN_MISE" kotlinc -version
-  ensure_tool "kotlin-language-server" "" "$KLS_MISE" kotlin-language-server
+  local kotlin_lsp kotlin_lsp_cmd=intellij-server
+  if ! command_exists intellij-server && command_exists kotlin-lsp; then kotlin_lsp_cmd=kotlin-lsp; fi
+  if kotlin_lsp=$(kotlin_lsp_spec); then
+    ensure_tool "Kotlin LSP" "$KOTLIN_LSP_MIN" "$kotlin_lsp" "$kotlin_lsp_cmd" --version
+  else
+    warn "Kotlin LSP has no build for $OS $(uname -m); skipping."
+    record "Kotlin LSP" "skipped (unsupported platform)"
+  fi
 
   ensure_tool "ripgrep" "$RG_MIN" "$RG_MISE" rg --version
   local fd_cmd=fd
@@ -491,6 +522,13 @@ install_nvim_plugins() {
     return 0
   fi
   record "Lazy plugins" "$([ "$DRY_RUN" = 1 ] && echo 'would restore' || echo 'restored') from lazy-lock.json"
+
+  info "Installing treesitter parsers..."
+  if run nvim --headless -c "lua local ok, err = pcall(require('configs.treesitter').install_sync); if not ok then io.stderr:write(tostring(err) .. '\n'); vim.cmd('cquit 1') end" -c qa; then
+    record "Treesitter parsers" "$([ "$DRY_RUN" = 1 ] && echo 'would install' || echo 'installed')"
+  else
+    fail "Treesitter parsers"
+  fi
 
   info "Installing Mason packages (this may take several minutes)..."
   if run nvim --headless "+MasonToolsInstallSync" +qa; then

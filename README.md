@@ -196,6 +196,18 @@ You now have two options to install the plugins and LSP servers.
      [Project Lombok](https://projectlombok.org/download) and place it in the
      JDTLS local directory. Normally this will be located at
      `~/.local/share/nvim/jdtls/`.
+   - Kotlin uses JetBrains' official
+     [Kotlin LSP](https://github.com/Kotlin/kotlin-lsp) (Alpha; partly
+     closed-source, distributed under a JetBrains EULA). It is not installed by
+     Mason. `install.sh` installs it via mise, or install it yourself
+     (`brew install JetBrains/utils/kotlin-lsp`, or unpack the standalone
+     archive) so that `intellij-server` or `kotlin-lsp` is on your `PATH`. It
+     starts only inside a Gradle or Maven project, and the install takes about
+     1.2 GB on disk.
+   - Kotlin debugging uses the same server's built-in debug adapter (no extra
+     install). Press `<F5>` to launch a main class, attach to a JVM on port
+     5005, or use the `Run`/`Debug` code lens above `main` (`grx`). Maven
+     projects need `mvn` on `PATH` for the build before a launch.
 1. Run the install.sh script. This installs the plugins at the versions in
    `lazy-lock.json` and the Mason packages. If you skipped the previous steps,
    it also installs any missing dependencies and Neovim itself.

@@ -129,10 +129,23 @@ require('mason-lspconfig').setup {
   },
 }
 
-vim.lsp.config('kotlin_language_server', {
-  cmd = { os.getenv 'HOME' .. '/bin/kotlin-lsp.sh' },
-  filetypes = { 'kotlin', 'kts' },
-})
+-- JetBrains' official Kotlin server. Installed by install.sh via mise rather
+-- than Mason, so mason-lspconfig does not enable it automatically. Homebrew and
+-- the upstream manual install expose it as `kotlin-lsp` instead.
+for _, kotlin_cmd in ipairs { 'intellij-server', 'kotlin-lsp' } do
+  if vim.fn.executable(kotlin_cmd) == 1 then
+    vim.lsp.config(
+      'kotlin_lsp',
+      vim.tbl_extend('force', require('debug.kotlin').lsp_config(), {
+        cmd = { kotlin_cmd, '--stdio' },
+        capabilities = capabilities,
+        workspace_required = true,
+      })
+    )
+    vim.lsp.enable 'kotlin_lsp'
+    break
+  end
+end
 
 vim.lsp.config('eslint', {
   cmd = {
