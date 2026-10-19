@@ -9,6 +9,15 @@ Neovim configuration for kickstarting your own setup.
 
 ## Installation
 
+### Windows: use WSL
+
+Native Windows is not supported. Install
+[WSL2](https://learn.microsoft.com/windows/wsl/install) with a Linux
+distribution (e.g. `wsl --install -d Ubuntu`), then follow the Linux
+instructions below inside WSL. `install.sh` detects WSL and sets up the
+clipboard with `win32yank`. Install a [Nerd Font](https://www.nerdfonts.com/) on
+the Windows side and select it in your terminal (e.g. Windows Terminal).
+
 ### Install Neovim
 
 Grab the latest version of Neovim from the
@@ -20,7 +29,7 @@ Grab the latest version of Neovim from the
 > (Linux, WSL, macOS) at the end of this guide. It checks every tool first and
 > keeps any existing install that is new enough; only missing or outdated tools
 > are installed, via [mise](https://mise.jdx.dev/). Run `./install.sh --dry-run`
-> to see what it would do. `install.cmd` (Windows) is untested.
+> to see what it would do.
 
 External Requirements:
 
@@ -148,41 +157,16 @@ brew install fnm
 
 ### Install this configuration
 
-Neovim's configurations are located under the following paths, depending on your
-OS:
-
-| OS | PATH | | :------------------- | :----------------------------------------
-| | Linux, MacOS | `$XDG_CONFIG_HOME/nvim`, `~/.config/nvim` | | Windows (cmd) |
-`%localappdata%\nvim\` | | Windows (powershell) | `$env:LOCALAPPDATA\nvim\` |
+Neovim reads its configuration from `$XDG_CONFIG_HOME/nvim`, which defaults to
+`~/.config/nvim` on Linux, macOS and WSL.
 
 #### Clone nvim-config
 
-<!-- markdownlint-disable MD033 -->
-
-<details><summary> Linux and Mac </summary>
+On Windows, run this inside WSL, not in `cmd.exe` or PowerShell.
 
 ```sh
 git clone https://github.com/olevaar/kickstart.nvim.git "${XDG_CONFIG_HOME:-$HOME/.config}"/nvim
 ```
-
-</details>
-
-<details><summary> Windows </summary>
-
-If you're using `cmd.exe`:
-
-```sh
-git clone https://github.com/olevaar/kickstart.nvim.git "%localappdata%\nvim"
-```
-
-If you're using `powershell.exe`
-
-```sh
-git clone https://github.com/olevaar/kickstart.nvim.git "${env:LOCALAPPDATA}\nvim"
-```
-
-</details>
-<!-- markdownlint-enable MD033 -->
 
 ### Post Installation
 
