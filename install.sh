@@ -1,775 +1,536 @@
-#!/bin/bash
+#!/usr/bin/env bash
 #
-# Neovim Config Prerequisites Installation Script
+# Installs Neovim and the external tools this config depends on.
 #
-# This script installs all the necessary dependencies for the kickstart.nvim configuration.
+# Every tool is checked first: if a working, new-enough version is already on
+# PATH (system package, Homebrew, an existing mise install, ...) it is left
+# alone. Only missing, broken or too-old tools are installed, and those go
+# through mise so that versions are the same on every machine.
+#
+# Supported: Linux (apt, dnf, pacman, zypper), WSL, macOS.
+# Set GITHUB_TOKEN to avoid GitHub API rate limits when mise resolves versions.
 
-set -e # Exit immediately if a command exits with a non-zero status.
+set -euo pipefail
+
+usage() {
+  cat <<'EOF'
+Usage: ./install.sh [options]
+
+  -n, --dry-run     Check everything and print what would be installed
+      --skip-system Do not install OS packages (git, make, gcc, clipboard, ...)
+      --skip-plugins Do not install Neovim plugins and Mason packages
+      --extra-jdks  Also install JDK 11 and 17 via mise (not activated globally)
+  -h, --help        Show this help
+EOF
+}
+
+DRY_RUN=0
+SKIP_SYSTEM=0
+SKIP_PLUGINS=0
+EXTRA_JDKS=0
+
+while [ $# -gt 0 ]; do
+  case "$1" in
+  -n | --dry-run) DRY_RUN=1 ;;
+  --skip-system) SKIP_SYSTEM=1 ;;
+  --skip-plugins) SKIP_PLUGINS=1 ;;
+  --extra-jdks) EXTRA_JDKS=1 ;;
+  -h | --help) usage && exit 0 ;;
+  *) usage >&2 && exit 2 ;;
+  esac
+  shift
+done
+
+# Tool requirements: minimum acceptable version, and the mise spec used when
+# the existing install is missing or insufficient. Bump versions here.
+NVIM_MIN=0.12.0 NVIM_MISE="aqua:neovim/neovim@0.12"
+NODE_MIN=22.0.0 NODE_MISE="node@22"
+PYTHON_MIN=3.9.0 PYTHON_MISE="python@3.12"
+GO_MIN=1.22.0 GO_MISE="go@1"
+JAVA_MIN=21.0.0 JAVA_MISE="java@temurin-21"
+KOTLIN_MIN=1.9.0 KOTLIN_MISE="kotlin@2"
+KLS_MISE="github:fwcd/kotlin-language-server@1.3"
+RG_MIN=13.0.0 RG_MISE="ripgrep@15"
+FD_MIN=8.0.0 FD_MISE="fd@10"
+TS_MIN=0.26.1 TS_MISE="tree-sitter@0.27"
+LAZYGIT_MIN=0.40.0 LAZYGIT_MISE="lazygit@0.66"
+MARKDOWNLINT_MISE="npm:markdownlint-cli@0.49"
+GEMINI_MISE="npm:@google/gemini-cli@latest"
+MDFORMAT_MISE="pipx:mdformat@1"
+UV_MISE="uv@latest"
+MISE_MIN=2025.6.0
+
+export MISE_YES=1
 export DEBIAN_FRONTEND=noninteractive
 
-# --- Global Variables ---
 OS=""
+IS_WSL=0
+SUMMARY=()
+FAILURES=()
+TMP_DIR="$(mktemp -d)"
+trap 'rm -rf "$TMP_DIR"' EXIT
 
-# --- Helper Functions ---
-print_info() {
-  echo -e "\033[34m[INFO]\033[0m $*"
-}
+# Run mise from $HOME so a project-local mise.toml in the current directory
+# cannot influence which versions are detected or installed.
+cd "$HOME"
 
-print_success() {
-  echo -e "\033[32m[SUCCESS]\033[0m $*"
-}
+# --- Output -------------------------------------------------------------------
 
-print_warning() {
-  echo -e "\033[33m[WARNING]\033[0m $*"
-}
-
-print_error() {
-  echo -e "\033[31m[ERROR]\033[0m $*" >&2
+info() { printf '\033[34m[INFO]\033[0m %s\n' "$*"; }
+ok() { printf '\033[32m[OK]\033[0m %s\n' "$*"; }
+warn() { printf '\033[33m[WARN]\033[0m %s\n' "$*" >&2; }
+die() {
+  printf '\033[31m[ERROR]\033[0m %s\n' "$*" >&2
   exit 1
 }
 
-command_exists() {
-  command -v "$1" &>/dev/null
+record() { SUMMARY+=("$(printf '%-24s %s' "$1" "$2")"); }
+fail() {
+  FAILURES+=("$1")
+  record "$1" "FAILED"
 }
 
-get_latest_github_release() {
-  local repo="$1"
-  curl -s "https://api.github.com/repos/${repo}/releases/latest" | grep '"tag_name"' | cut -d '"' -f 4
+# --- Helpers ------------------------------------------------------------------
+
+command_exists() { command -v "$1" >/dev/null 2>&1; }
+
+run() {
+  if [ "$DRY_RUN" = 1 ]; then
+    printf '\033[2m[dry-run]\033[0m %s\n' "$*"
+  else
+    "$@"
+  fi
 }
 
-check_sudo() {
-  if ! command_exists sudo; then
-    print_error "sudo is required but not installed. Please install sudo or run this script as root."
-  fi
-  if ! sudo -n true 2>/dev/null; then
-    print_info "This script requires sudo privileges. You may be prompted for your password."
-    sudo -v || print_error "Failed to obtain sudo privileges."
+as_root() {
+  if [ "$(id -u)" = 0 ]; then
+    run "$@"
+  elif command_exists sudo; then
+    run sudo "$@"
+  else
+    die "Root privileges required for: $* (sudo not found)"
   fi
 }
+
+# Returns 0 if version $1 >= $2. Compares up to three numeric components.
+version_ge() {
+  local IFS=.
+  # shellcheck disable=SC2206
+  local -a a=($1) b=($2)
+  local i x y
+  for i in 0 1 2; do
+    x=$((10#${a[i]:-0}))
+    y=$((10#${b[i]:-0}))
+    [ "$x" -gt "$y" ] && return 0
+    [ "$x" -lt "$y" ] && return 1
+  done
+  return 0
+}
+
+# Runs a version command and prints the first x.y[.z] found in its output.
+# Fails if the command itself fails (broken install, unset mise shim, ...).
+tool_version() {
+  local out
+  out=$("$@" 2>&1) || return 1
+  printf '%s\n' "$out" | grep -Eo '[0-9]+\.[0-9]+(\.[0-9]+)?' | head -n 1
+}
+
+refresh_mise_env() {
+  command_exists mise || return 0
+  eval "$(mise env -s bash)"
+}
+
+mise_use() {
+  if ! run mise use -g "$1"; then
+    return 1
+  fi
+  [ "$DRY_RUN" = 1 ] || refresh_mise_env
+}
+
+# check_tool LABEL MIN CMD [ARGS...]
+# MIN may be empty (only require the command to exist) or 0 (any version, but
+# the command must run successfully).
+check_tool() {
+  local label=$1 min=$2 cmd=$3 path ver
+  shift 2
+  path=$(command -v "$cmd" 2>/dev/null) || return 1
+  if [ -z "$min" ]; then
+    ok "$label found at $path"
+    record "$label" "existing ($path)"
+    return 0
+  fi
+  if ! ver=$(tool_version "$@"); then
+    if [ "$min" = 0 ] && "$@" >/dev/null 2>&1; then
+      ok "$label found at $path"
+      record "$label" "existing ($path)"
+      return 0
+    fi
+    warn "$label at $path does not run ('$*' failed); it is broken or an unset mise shim"
+    return 1
+  fi
+  if version_ge "$ver" "$min"; then
+    ok "$label $ver found at $path"
+    record "$label" "existing $ver ($path)"
+    return 0
+  fi
+  warn "$label $ver at $path is older than required $min"
+  return 1
+}
+
+# install_tool LABEL MIN MISE_SPEC CMD [ARGS...]
+install_tool() {
+  local label=$1 min=$2 spec=$3 ver
+  shift 3
+  info "Installing $label via mise ($spec)..."
+  if ! mise_use "$spec"; then
+    warn "mise failed to install $spec"
+    fail "$label"
+    return 0
+  fi
+  if [ "$DRY_RUN" = 1 ]; then
+    record "$label" "would install via mise ($spec)"
+    return 0
+  fi
+  if [ -z "$min" ] || [ "$min" = 0 ]; then
+    if command_exists "$1"; then
+      record "$label" "installed via mise ($spec)"
+      return 0
+    fi
+  elif ver=$(tool_version "$@") && version_ge "$ver" "$min"; then
+    record "$label" "installed $ver via mise ($spec)"
+    return 0
+  fi
+  warn "$label was installed by mise but '$1' is still not usable on PATH"
+  fail "$label"
+}
+
+# ensure_tool LABEL MIN MISE_SPEC CMD [ARGS...]
+ensure_tool() {
+  local label=$1 min=$2 spec=$3
+  shift 3
+  check_tool "$label" "$min" "$@" || install_tool "$label" "$min" "$spec" "$@"
+}
+
+# --- Platform -----------------------------------------------------------------
 
 detect_os() {
-  print_info "Detecting operating system..."
   case "$(uname -s)" in
-  Linux*) OS="linux" ;;
-  Darwin*) OS="macos" ;;
-  *) print_error "Unsupported operating system: $(uname -s)" ;;
+  Linux*)
+    OS=linux
+    if grep -qi microsoft /proc/version 2>/dev/null; then IS_WSL=1; fi
+    ;;
+  Darwin*) OS=macos ;;
+  *) die "Unsupported operating system: $(uname -s)" ;;
   esac
-  print_success "Operating system detected: $OS"
+  info "Platform: $OS$([ "$IS_WSL" = 1 ] && echo ' (WSL)') $(uname -m)"
 }
 
-# --- Installation Functions ---
+package_manager() {
+  local pm
+  for pm in apt-get dnf pacman zypper; do
+    if command_exists "$pm"; then
+      echo "$pm"
+      return 0
+    fi
+  done
+  return 1
+}
+
+# Maps a required command to the package that provides it.
+package_for() {
+  local pm=$1 cmd=$2
+  case "$cmd" in
+  make | gcc) [ "$pm" = apt-get ] && echo build-essential || echo "$cmd" ;;
+  fc-cache) echo fontconfig ;;
+  wl-copy) echo wl-clipboard ;;
+  *) echo "$cmd" ;;
+  esac
+}
 
 install_system_packages() {
-  print_info "Installing essential system packages..."
-  case "$OS" in
-  "linux")
-    check_sudo
-    if command_exists apt-get; then
-      sudo apt-get update
-      sudo apt-get install -y curl git build-essential unzip python3 python3-pip python3-venv pipx
-    elif command_exists dnf; then
-      sudo dnf install -y curl git gcc-c++ make unzip python3 python3-pip pipx
-    elif command_exists pacman; then
-      sudo pacman -Syu --noconfirm curl git base-devel unzip python python-pip python-pipx
+  if [ "$SKIP_SYSTEM" = 1 ]; then
+    info "Skipping OS packages (--skip-system)."
+    return 0
+  fi
+
+  if [ "$OS" = macos ]; then
+    if ! xcode-select -p >/dev/null 2>&1; then
+      run xcode-select --install || true
+      die "Xcode Command Line Tools are required (git, make, clang). Finish their installation, then re-run this script."
+    fi
+    ok "Xcode Command Line Tools present"
+    return 0
+  fi
+
+  local -a needed=(git curl unzip tar make gcc)
+  [ "$IS_WSL" = 1 ] || needed+=(fc-cache)
+
+  if [ "$IS_WSL" = 0 ] && ! command_exists wl-copy && ! command_exists xclip && ! command_exists xsel; then
+    if [ -n "${WAYLAND_DISPLAY:-}" ]; then
+      needed+=(wl-copy)
+    elif [ -n "${DISPLAY:-}" ]; then
+      needed+=(xclip)
     else
-      print_error "Unsupported Linux package manager. Please install curl, git, build-essential, unzip, python3, and pipx manually."
+      info "No graphical session detected; skipping clipboard tool."
     fi
+  fi
+
+  local -a missing=() packages=()
+  local cmd pkg
+  for cmd in "${needed[@]}"; do
+    command_exists "$cmd" && continue
+    missing+=("$cmd")
+  done
+
+  if [ ${#missing[@]} -eq 0 ]; then
+    ok "OS packages present (${needed[*]})"
+    return 0
+  fi
+
+  local pm
+  pm=$(package_manager) || die "No supported package manager found. Install these manually: ${missing[*]}"
+
+  for cmd in "${missing[@]}"; do
+    pkg=$(package_for "$pm" "$cmd")
+    case " ${packages[*]-} " in *" $pkg "*) ;; *) packages+=("$pkg") ;; esac
+  done
+
+  info "Installing OS packages via $pm: ${packages[*]}"
+  case "$pm" in
+  apt-get)
+    as_root apt-get update
+    as_root apt-get install -y "${packages[@]}"
     ;;
-  "macos")
-    if ! command_exists brew; then
-      print_error "Homebrew not found. Please install Homebrew first: https://brew.sh/"
-    fi
-    brew install curl git unzip make python pipx
-    ;;
+  dnf) as_root dnf install -y "${packages[@]}" ;;
+  pacman) as_root pacman -S --needed --noconfirm "${packages[@]}" ;;
+  zypper) as_root zypper --non-interactive install "${packages[@]}" ;;
   esac
-  print_success "Essential system packages installed."
+  record "OS packages" "installed ${packages[*]}"
 }
 
-install_node() {
-  print_info "Installing Node.js v22..."
+# --- mise ---------------------------------------------------------------------
 
+install_mise() {
   if command_exists mise; then
-    print_info "mise detected. Using mise to install Node.js..."
-    if ! mise list node 2>/dev/null | grep -q "22"; then
-      mise install node@22
+    local ver
+    ver=$(tool_version mise --version) || die "mise at $(command -v mise) does not run."
+    if ! version_ge "$ver" "$MISE_MIN"; then
+      warn "mise $ver is older than $MISE_MIN; the aqua/github/npm/pipx backends may be missing. Upgrade mise if installs fail."
     fi
-    mise use -g node@22
-    print_success "Node.js v22 installed and set as default via mise."
-    return
-  fi
-
-  print_info "mise not found. Installing fnm and Node.js v22..."
-  if ! command_exists fnm; then
-    curl -fsSL https://fnm.vercel.app/install | bash -s -- --skip-shell
-    export PATH="$HOME/.local/share/fnm:$PATH"
-    eval "$(fnm env)"
-    print_success "fnm installed."
-    setup_fnm_shell
+    ok "mise $ver found at $(command -v mise)"
+    record "mise" "existing $ver"
   else
-    print_info "fnm is already installed."
-    setup_fnm_shell
+    info "Installing mise..."
+    if command_exists pacman; then
+      as_root pacman -S --needed --noconfirm mise
+    elif [ "$OS" = macos ] && command_exists brew; then
+      run brew install mise
+    else
+      run sh -c 'curl -fsSL https://mise.run | sh'
+      export PATH="$HOME/.local/bin:$PATH"
+    fi
+    if [ "$DRY_RUN" = 0 ] && ! command_exists mise; then
+      die "mise installation failed. See https://mise.jdx.dev/getting-started.html"
+    fi
+    record "mise" "installed"
   fi
 
-  if ! fnm list | grep -q "v22"; then
-    fnm install 22
-  fi
-  fnm default 22
-  print_success "Node.js v22 is set as the default."
+  setup_mise_activation
+  refresh_mise_env
 }
 
-setup_fnm_shell() {
-  print_info "Configuring shell for fnm..."
-  local profile_file
-  local shell_name
-  shell_name=$(basename "$SHELL")
+setup_mise_activation() {
+  if [ -n "${MISE_SHELL:-}" ]; then
+    return 0
+  fi
 
+  local shell_name rc line mise_bin
+  shell_name=$(basename "${SHELL:-bash}")
+  mise_bin=$(command -v mise 2>/dev/null || echo "$HOME/.local/bin/mise")
   case "$shell_name" in
-  "bash") profile_file="$HOME/.bashrc" ;;
-  "zsh") profile_file="$HOME/.zshrc" ;;
-  "fish") profile_file="$HOME/.config/fish/config.fish" ;;
+  bash)
+    rc="$HOME/.bashrc"
+    line="eval \"\$($mise_bin activate bash)\""
+    ;;
+  zsh)
+    rc="$HOME/.zshrc"
+    line="eval \"\$($mise_bin activate zsh)\""
+    ;;
+  fish)
+    rc="$HOME/.config/fish/config.fish"
+    line="$mise_bin activate fish | source"
+    ;;
   *)
-    print_warning "Could not detect shell ($shell_name). Please add fnm to your shell profile manually."
-    print_warning "Add the following lines to your shell configuration file:"
-    print_warning "For bash/zsh: "
-    print_warning "  export PATH=\"\$HOME/.local/share/fnm:\$PATH\""
-    print_warning "  eval \"\$(fnm env)\""
-    print_warning "For fish: "
-    print_warning "  fish_add_path \"\$HOME/.local/share/fnm\""
-    print_warning "  fnm env | source"
-    return
+    warn "Unknown shell '$shell_name'. Activate mise manually: https://mise.jdx.dev/getting-started.html"
+    return 0
     ;;
   esac
 
-  if [ ! -f "$profile_file" ]; then
-    print_info "Creating shell profile file: $profile_file"
-    touch "$profile_file"
+  if [ -f "$rc" ] && grep -q "mise activate" "$rc"; then
+    return 0
   fi
-
-  local fnm_path_str="export PATH=\"\$HOME/.local/share/fnm:\$PATH\""
-  local fnm_env_str="eval \"\$(fnm env)\""
-
-  if [ "$shell_name" = "fish" ]; then
-    fnm_path_str="fish_add_path \"\$HOME/.local/share/fnm\""
-    fnm_env_str="fnm env | source"
-  fi
-
-  if ! grep -q "fnm env" "$profile_file"; then
-    print_info "Adding fnm configuration to $profile_file"
-    echo "" >>"$profile_file"
-    echo "# fnm (Fast Node Manager)" >>"$profile_file"
-    echo "$fnm_path_str" >>"$profile_file"
-    echo "$fnm_env_str" >>"$profile_file"
-    print_success "fnm configured in $profile_file."
+  info "Adding mise activation to $rc"
+  if [ "$DRY_RUN" = 1 ]; then
+    run "echo '$line' >> $rc"
   else
-    print_info "fnm configuration already present in $profile_file."
+    mkdir -p "$(dirname "$rc")"
+    printf '\n# mise (tool version manager)\n%s\n' "$line" >>"$rc"
   fi
 }
 
-install_python() {
-  print_info "Installing Python..."
+# --- Tools --------------------------------------------------------------------
 
-  if command_exists mise; then
-    print_info "mise detected. Using mise to install Python 3.12..."
-    if ! mise list python 2>/dev/null | grep -q "3.12"; then
-      mise install python@3.12
-    fi
-    mise use -g python@3.12
-    print_success "Python 3.12 installed and set as default via mise."
-    return
+install_tools() {
+  ensure_tool "Neovim" "$NVIM_MIN" "$NVIM_MISE" nvim --version
+
+  ensure_tool "Node.js" "$NODE_MIN" "$NODE_MISE" node --version
+  if ! check_tool "npm" 0 npm --version; then
+    install_tool "Node.js (for npm)" "$NODE_MIN" "$NODE_MISE" node --version
   fi
 
-  print_info "mise not found. Python should already be installed via system packages."
-}
+  ensure_tool "Python" "$PYTHON_MIN" "$PYTHON_MISE" python3 --version
+  ensure_tool "Go" "$GO_MIN" "$GO_MISE" go version
+  ensure_tool "Java" "$JAVA_MIN" "$JAVA_MISE" java -version
+  ensure_tool "Kotlin" "$KOTLIN_MIN" "$KOTLIN_MISE" kotlinc -version
+  ensure_tool "kotlin-language-server" "" "$KLS_MISE" kotlin-language-server
 
-install_python_packages() {
-  print_info "Installing Python packages via pipx (mdformat)..."
-  if ! command_exists pipx; then
-    print_error "pipx not found. Please ensure system packages are installed correctly."
+  ensure_tool "ripgrep" "$RG_MIN" "$RG_MISE" rg --version
+  local fd_cmd=fd
+  if ! command_exists fd && command_exists fdfind; then fd_cmd=fdfind; fi
+  ensure_tool "fd" "$FD_MIN" "$FD_MISE" "$fd_cmd" --version
+  ensure_tool "tree-sitter CLI" "$TS_MIN" "$TS_MISE" tree-sitter --version
+  ensure_tool "lazygit" "$LAZYGIT_MIN" "$LAZYGIT_MISE" lazygit --version
+
+  ensure_tool "markdownlint" 0 "$MARKDOWNLINT_MISE" markdownlint --version
+  ensure_tool "gemini CLI" 0 "$GEMINI_MISE" gemini --version
+
+  if ! check_tool "mdformat" 0 mdformat --version; then
+    if ! command_exists uv && ! command_exists pipx; then
+      ensure_tool "uv" 0 "$UV_MISE" uv --version
+    fi
+    install_tool "mdformat" 0 "$MDFORMAT_MISE" mdformat --version
   fi
 
-  pipx ensurepath
-  if ! pipx install mdformat; then
-    print_warning "Failed to install mdformat via pipx."
-  fi
-  print_success "Python packages installed."
-}
-
-install_npm_packages() {
-  # Language servers from npm get installed by Mason, so we only install what mason doesn't cover
-  print_info "Installing global npm packages (markdownlint, @google/gemini-cli)..."
-  if ! npm install -g markdownlint-cli @google/gemini-cli; then
-    print_error "Failed to install npm packages. Please check your npm installation."
-  fi
-  print_success "Global npm packages installed."
-}
-
-install_go() {
-  print_info "Installing Go..."
-
-  if command_exists mise; then
-    print_info "mise detected. Using mise to install Go..."
-    if ! mise list go 2>/dev/null | grep -q "1\."; then
-      mise install go@latest
-    fi
-    mise use -g go@latest
-    print_success "Go installed and set as default via mise."
-    return
-  fi
-
-  case "$OS" in
-  "linux")
-    check_sudo
-    local arch_name=""
-    case "$(uname -m)" in
-    x86_64) arch_name="amd64" ;;
-    aarch64) arch_name="arm64" ;;
-    *) print_error "Unsupported architecture for Go: $(uname -m)" ;;
-    esac
-
-    print_info "Fetching latest Go version..."
-    local latest_go_version
-    latest_go_version=$(curl -sL "https://go.dev/VERSION?m=text" | head -n 1)
-    if [ -z "$latest_go_version" ]; then
-      print_error "Failed to fetch latest Go version."
-    fi
-
-    local go_tarball="${latest_go_version}.linux-${arch_name}.tar.gz"
-    local go_url="https://go.dev/dl/${go_tarball}"
-
-    print_info "Downloading ${go_tarball}..."
-    local original_dir="$PWD"
-    cd /tmp || print_error "Failed to change directory to /tmp"
-    if ! curl -fLo "$go_tarball" "$go_url"; then
-      cd "$original_dir"
-      print_error "Failed to download Go from ${go_url}"
-    fi
-
-    print_info "Extracting Go to /usr/local..."
-    sudo rm -rf /usr/local/go
-    if ! sudo tar -C /usr/local -xzf "$go_tarball"; then
-      cd "$original_dir"
-      print_error "Failed to extract Go tarball."
-    fi
-
-    rm -f "$go_tarball"
-    cd "$original_dir"
-
-    if [[ ":$PATH:" != *":/usr/local/go/bin:"* ]]; then
-      print_warning "Make sure /usr/local/go/bin is in your PATH."
-      print_info "Add this to your shell profile: export PATH=\"/usr/local/go/bin:\$PATH\""
-    fi
-    ;;
-  "macos")
-    if ! command_exists brew; then
-      print_error "Homebrew not found. Please install Homebrew first."
-    fi
-    brew install go
-    ;;
-  esac
-  print_success "Go installed."
-}
-
-install_java_sdks() {
-  print_info "Installing OpenJDK versions..."
-
-  if command_exists mise; then
-    print_info "mise detected. Using mise to install Java versions..."
-    for version in 11 17 21; do
-      if ! mise list java 2>/dev/null | grep -q "^java.*${version}"; then
-        mise install java@${version}
+  if [ "$EXTRA_JDKS" = 1 ]; then
+    local v
+    for v in 11 17; do
+      info "Installing JDK $v via mise (not activated globally)..."
+      if run mise install "java@temurin-$v"; then
+        record "JDK $v" "installed via mise (mise where java@temurin-$v)"
+      else
+        fail "JDK $v"
       fi
     done
-    mise use -g java@21
-    print_success "Java 11, 17, and 21 installed via mise (default: 21)."
-    return
-  fi
-
-  _install_java_with_sdkman() {
-    if [ ! -d "$HOME/.sdkman" ]; then
-      print_info "Installing SDKMAN! to manage Java versions..."
-      curl -s "https://get.sdkman.io" | bash
-      if [ ! -f "$HOME/.sdkman/bin/sdkman-init.sh" ]; then
-        print_error "SDKMAN! installation failed."
-      fi
-    fi
-    if ! source "$HOME/.sdkman/bin/sdkman-init.sh"; then
-      print_error "Failed to initialize SDKMAN!."
-    fi
-    print_info "Installing Java $1 via SDKMAN!..."
-    if ! sdk install java "$1"; then
-      print_warning "Failed to install Java $1 via SDKMAN!."
-    fi
-  }
-
-  case "$OS" in
-  "linux")
-    if command_exists apt-get; then
-      check_sudo
-      sudo apt-get update
-      print_info "Attempting to install OpenJDK 11 with apt..."
-      if ! sudo apt-get install -y openjdk-11-jdk; then
-        print_warning "openjdk-11-jdk not available via apt, falling back to SDKMAN!."
-        _install_java_with_sdkman "11.0.23-tem"
-      fi
-      print_info "Attempting to install OpenJDK 17 with apt..."
-      if ! sudo apt-get install -y openjdk-17-jdk; then
-        print_warning "openjdk-17-jdk not available via apt, falling back to SDKMAN!."
-        _install_java_with_sdkman "17.0.11-tem"
-      fi
-      print_info "Attempting to install OpenJDK 21 with apt..."
-      if ! sudo apt-get install -y openjdk-21-jdk; then
-        print_warning "openjdk-21-jdk not available via apt, falling back to SDKMAN!."
-        _install_java_with_sdkman "21.0.3-tem"
-      fi
-      print_success "OpenJDK installation process completed."
-    else
-      print_warning "apt-get not found. Using SDKMAN! to install Java versions."
-      _install_java_with_sdkman "11.0.23-tem"
-      _install_java_with_sdkman "17.0.11-tem"
-      _install_java_with_sdkman "21.0.3-tem"
-      print_success "OpenJDK installation process completed."
-    fi
-    ;;
-  "macos")
-    if ! command_exists brew; then
-      print_error "Homebrew not found. Please install Homebrew first."
-    fi
-    brew install openjdk@11 openjdk@17 openjdk@21
-    print_success "OpenJDK 11, 17, and 21 installed via Homebrew."
-    ;;
-  esac
-}
-
-install_kotlin_sdk() {
-  print_info "Installing SDKMAN! and Kotlin..."
-  if [ ! -d "$HOME/.sdkman" ]; then
-    curl -s "https://get.sdkman.io" | bash
-    if [ ! -f "$HOME/.sdkman/bin/sdkman-init.sh" ]; then
-      print_error "SDKMAN! installation failed."
-    fi
-  fi
-
-  if ! source "$HOME/.sdkman/bin/sdkman-init.sh"; then
-    print_error "Failed to initialize SDKMAN!."
-  fi
-
-  if ! sdk install kotlin; then
-    print_warning "Failed to install Kotlin SDK via SDKMAN!."
-  fi
-  print_success "Kotlin SDK installed via SDKMAN!."
-}
-
-install_kotlin_lsp() {
-  print_info "Installing kotlin-lsp..."
-  if [ ! -d "$HOME/kotlin-language-server" ]; then
-    local original_dir="$PWD"
-    git clone https://github.com/fwcd/kotlin-language-server "$HOME/kotlin-language-server"
-    cd "$HOME/kotlin-language-server" || print_error "Failed to change directory to $HOME/kotlin-language-server"
-
-    if [ ! -f "./gradlew" ]; then
-      cd "$original_dir"
-      print_error "gradlew not found in kotlin-language-server repository."
-    fi
-
-    print_info "Temporarily setting Java 11 for gradlew..."
-    local original_java_home="$JAVA_HOME"
-    local java_manager="javahome"
-
-    if command_exists mise; then
-      java_manager="mise"
-      mise use java@11
-    elif [ -f "$HOME/.sdkman/bin/sdkman-init.sh" ]; then
-      source "$HOME/.sdkman/bin/sdkman-init.sh"
-      if sdk list java 2>/dev/null | grep -q "11\.0\.23-tem"; then
-        java_manager="sdkman"
-        sdk use java 11.0.23-tem
-      fi
-    fi
-
-    if [ "$java_manager" = "javahome" ]; then
-      if [ "$OS" = "macos" ] && command_exists /usr/libexec/java_home; then
-        export JAVA_HOME=$(/usr/libexec/java_home -v 11 2>/dev/null)
-      elif [ -d "/usr/lib/jvm/java-11-openjdk-amd64" ]; then
-        export JAVA_HOME="/usr/lib/jvm/java-11-openjdk-amd64"
-      elif [ -d "/usr/lib/jvm/java-11-openjdk-arm64" ]; then
-        export JAVA_HOME="/usr/lib/jvm/java-11-openjdk-arm64"
-      elif command_exists apt-get; then
-        check_sudo
-        sudo update-java-alternatives -s java-1.11.0-openjdk-amd64 2>/dev/null || sudo update-java-alternatives -s java-1.11.0-openjdk-arm64 2>/dev/null || true
-        java_manager="apt"
-      fi
-    fi
-
-    local gradlew_failed=false
-    if ! ./gradlew :server:installDist; then
-      gradlew_failed=true
-    fi
-
-    print_info "Reverting Java back to the highest version (Java 21)..."
-    if [ "$java_manager" = "mise" ]; then
-      mise use java@21
-    elif [ "$java_manager" = "sdkman" ]; then
-      sdk use java 21.0.3-tem
-    elif [ "$java_manager" = "javahome" ]; then
-      if [ -n "$original_java_home" ]; then
-        export JAVA_HOME="$original_java_home"
-      else
-        unset JAVA_HOME
-      fi
-    elif [ "$java_manager" = "apt" ]; then
-      check_sudo
-      sudo update-java-alternatives -s java-1.21.0-openjdk-amd64 2>/dev/null || sudo update-java-alternatives -s java-1.21.0-openjdk-arm64 2>/dev/null || true
-    fi
-
-    if [ "$gradlew_failed" = true ]; then
-      cd "$original_dir"
-      print_error "Failed to build kotlin-language-server."
-    fi
-
-    check_sudo
-    if ! sudo ln -sf "$HOME/kotlin-language-server/server/build/install/server/bin/kotlin-language-server" /usr/local/bin/; then
-      print_warning "Failed to create symlink in /usr/local/bin. You may need to add $HOME/kotlin-language-server/server/build/install/server/bin to your PATH."
-    fi
-
-    cd "$original_dir"
-    print_success "kotlin-lsp installed."
-  else
-    print_info "kotlin-lsp directory already exists. Skipping clone and build."
   fi
 }
 
-install_ripgrep_fd() {
-  print_info "Installing ripgrep and fd..."
-  case "$OS" in
-  "linux")
-    check_sudo
-    if command_exists apt-get; then
-      sudo apt-get install -y ripgrep fd-find
-      if ! command_exists fd && command_exists fdfind; then
-        sudo ln -s "$(which fdfind)" /usr/local/bin/fd
-      fi
-    elif command_exists dnf; then
-      sudo dnf install -y ripgrep fd-find
-    elif command_exists pacman; then
-      sudo pacman -S --noconfirm ripgrep fd
-    else
-      print_warning "Could not install ripgrep or fd with package manager. Please install them manually."
-    fi
-    ;;
-  "macos")
-    if ! command_exists brew; then
-      print_error "Homebrew not found. Please install Homebrew first."
-    fi
-    brew install ripgrep fd
-    ;;
-  esac
-  print_success "ripgrep and fd installed."
-}
+# --- Extras -------------------------------------------------------------------
 
 install_nerd_font() {
-  print_info "Installing Ubuntu Mono Nerd Font..."
-  local font_dir
-  local original_dir="$PWD"
-
+  local font_dir file
+  if [ "$IS_WSL" = 1 ]; then
+    info "WSL: install a Nerd Font on Windows and select it in your terminal: https://www.nerdfonts.com/font-downloads"
+    return 0
+  fi
   case "$OS" in
-  "linux")
-    font_dir="$HOME/.local/share/fonts"
-    ;;
-  "macos")
-    font_dir="$HOME/Library/Fonts"
-    ;;
+  linux) font_dir="$HOME/.local/share/fonts" ;;
+  macos) font_dir="$HOME/Library/Fonts" ;;
   esac
+  file="$font_dir/UbuntuMonoNerdFont-Regular.ttf"
 
-  if [ ! -d "$font_dir" ]; then
-    mkdir -p "$font_dir"
+  if [ -f "$file" ] || { command_exists fc-list && fc-list 2>/dev/null | grep -qi "UbuntuMono Nerd"; }; then
+    ok "UbuntuMono Nerd Font present"
+    record "Nerd Font" "existing"
+    return 0
   fi
 
-  if [ ! -f "$font_dir/UbuntuMonoNerdFont-Regular.ttf" ]; then
-    cd /tmp || print_error "Failed to change directory to /tmp"
-
-    print_info "Fetching latest Nerd Fonts release..."
-    local nerd_fonts_version
-    nerd_fonts_version=$(get_latest_github_release "ryanoasis/nerd-fonts")
-    if [ -z "$nerd_fonts_version" ]; then
-      print_warning "Failed to fetch latest Nerd Fonts version, using fallback v3.1.1"
-      nerd_fonts_version="v3.1.1"
-    fi
-
-    local font_url="https://github.com/ryanoasis/nerd-fonts/releases/download/${nerd_fonts_version}/UbuntuMono.zip"
-    print_info "Downloading Ubuntu Mono Nerd Font ${nerd_fonts_version}..."
-
-    if ! curl -fLo "UbuntuMono.zip" "$font_url"; then
-      cd "$original_dir"
-      print_error "Failed to download Nerd Font from ${font_url}"
-    fi
-
-    unzip -o "UbuntuMono.zip" -d "$font_dir"
-    rm "UbuntuMono.zip"
-
-    if [ "$OS" = "linux" ]; then
-      fc-cache -fv
-    fi
-
-    cd "$original_dir"
-    print_success "Ubuntu Mono Nerd Font installed."
-    print_success "You may now set your terminal font to 'Ubuntu Mono Nerd Font'. This will enhance the appearance of Neovim and its plugins."
-    if [ "$OS" = "linux" ] && grep -qi "microsoft" /proc/version 2>/dev/null; then
-      print_success "If you are using WSL, you will need to download the font on your Windows host and set it in your terminal emulator. Go to https://nerdfonts.com/font-downloads to download the font. (You can choose any Nerd Font you like!, this script just installs Ubuntu Mono)"
-    fi
+  info "Installing UbuntuMono Nerd Font..."
+  local zip="$TMP_DIR/UbuntuMono.zip"
+  if run curl -fsSL -o "$zip" "https://github.com/ryanoasis/nerd-fonts/releases/latest/download/UbuntuMono.zip" &&
+    run mkdir -p "$font_dir" &&
+    run unzip -o -q "$zip" '*.ttf' -d "$font_dir"; then
+    if [ "$OS" = linux ] && command_exists fc-cache; then run fc-cache -f "$font_dir"; fi
+    record "Nerd Font" "installed (set your terminal font to 'UbuntuMono Nerd Font')"
   else
-    print_info "Ubuntu Mono Nerd Font already installed. Skipping installation."
+    fail "Nerd Font"
   fi
-}
-
-install_neovim() {
-  print_info "Installing Neovim (latest stable)..."
-  case "$OS" in
-  "linux")
-    local needs_install=false
-    if ! command_exists nvim; then
-      needs_install=true
-    else
-      local nvim_version
-      nvim_version=$(nvim --version | head -n 1 | grep -oP 'v\K[0-9]+\.[0-9]+' || echo "0.0")
-      local major minor
-      major=$(echo "$nvim_version" | cut -d. -f1)
-      minor=$(echo "$nvim_version" | cut -d. -f2)
-
-      if [ "$major" -lt 1 ] && [ "$minor" -lt 10 ]; then
-        needs_install=true
-      fi
-    fi
-
-    if [ "$needs_install" = true ]; then
-      local original_dir="$PWD"
-      cd /tmp || print_error "Failed to change directory to /tmp"
-
-      print_info "Fetching latest Neovim release..."
-      local nvim_version
-      nvim_version=$(get_latest_github_release "neovim/neovim")
-      if [ -z "$nvim_version" ]; then
-        print_warning "Failed to fetch latest Neovim version, using fallback v0.11.4"
-        nvim_version="v0.11.4"
-      fi
-
-      local nvim_url="https://github.com/neovim/neovim/releases/download/${nvim_version}/nvim.appimage"
-      print_info "Downloading Neovim ${nvim_version}..."
-
-      if ! curl -fLo nvim.appimage "$nvim_url"; then
-        cd "$original_dir"
-        print_error "Failed to download Neovim AppImage from ${nvim_url}"
-      fi
-
-      chmod u+x nvim.appimage
-      if [ ! -d "$HOME/.local/bin" ]; then
-        mkdir -p "$HOME/.local/bin"
-      fi
-
-      if sudo mv nvim.appimage /usr/local/bin/nvim 2>/dev/null; then
-        print_success "Neovim AppImage installed to /usr/local/bin/nvim."
-      else
-        mv nvim.appimage "$HOME/.local/bin/nvim"
-        print_success "Neovim AppImage installed to $HOME/.local/bin/nvim."
-
-        if [[ ":$PATH:" != *":$HOME/.local/bin:"* ]]; then
-          print_warning "Make sure $HOME/.local/bin is in your PATH."
-          print_info "Add this to your shell profile: export PATH=\"\$HOME/.local/bin:\$PATH\""
-        fi
-      fi
-
-      cd "$original_dir"
-    else
-      print_info "Neovim is already installed with a supported version."
-    fi
-    ;;
-  "macos")
-    if ! command_exists brew; then
-      print_error "Homebrew not found. Please install Homebrew first."
-    fi
-    brew install neovim
-    print_success "Neovim installed via Homebrew."
-    ;;
-  esac
 }
 
 install_win32yank() {
-  if [ "$OS" != "linux" ] || ! grep -qi "microsoft" /proc/version 2>/dev/null; then
-    print_info "Not running under WSL. Skipping win32yank."
+  [ "$IS_WSL" = 1 ] || return 0
+  if check_tool "win32yank" "" win32yank.exe; then
     return 0
   fi
 
-  print_info "Installing win32yank (for WSL clipboard integration)..."
-  local bin_dir="$HOME/.local/bin"
-  local exe_path="$bin_dir/win32yank.exe"
-
-  if [ -f "$exe_path" ]; then
-    print_info "win32yank already present at $exe_path"
-    return 0
-  fi
-
-  print_info "Fetching latest win32yank release..."
-  local version
-  version=$(get_latest_github_release "equalsraf/win32yank")
-  if [ -z "$version" ]; then
-    print_warning "Failed to fetch latest win32yank version, using fallback v0.1.1"
-    version="v0.1.1"
-  fi
-
-  local zip_url="https://github.com/equalsraf/win32yank/releases/download/${version}/win32yank-x64.zip"
-
-  mkdir -p "$bin_dir"
-  tmp_zip="$(mktemp /tmp/win32yank.XXXXXX.zip)"
-  print_info "Downloading win32yank ${version}..."
-
-  if ! curl -fsSL -o "$tmp_zip" "$zip_url"; then
-    rm -f "$tmp_zip"
-    print_error "Failed to download win32yank ZIP from ${zip_url}"
-  fi
-
-  print_info "Extracting win32yank.exe..."
-  if unzip -p "$tmp_zip" win32yank.exe >"$exe_path"; then
-    chmod +x "$exe_path"
-    rm -f "$tmp_zip"
-    print_success "win32yank installed to $exe_path"
+  info "Installing win32yank (WSL clipboard)..."
+  local zip="$TMP_DIR/win32yank.zip" bin="$HOME/.local/bin"
+  if run curl -fsSL -o "$zip" "https://github.com/equalsraf/win32yank/releases/latest/download/win32yank-x64.zip" &&
+    run mkdir -p "$bin" &&
+    run unzip -o -q "$zip" win32yank.exe -d "$bin" &&
+    run chmod +x "$bin/win32yank.exe"; then
+    record "win32yank" "installed ($bin/win32yank.exe)"
+    case ":$PATH:" in *":$bin:"*) ;; *) warn "Add $bin to your PATH." ;; esac
   else
-    rm -f "$tmp_zip"
-    print_error "Failed to extract win32yank.exe from ZIP."
-  fi
-
-  if [ -d "/usr/local/bin" ] && [ -w "/usr/local/bin" ]; then
-    ln -sf "$exe_path" /usr/local/bin/win32yank.exe
-  fi
-
-  if [[ ":$PATH:" != *":$HOME/.local/bin:"* ]]; then
-    print_warning "Make sure $HOME/.local/bin is in your PATH."
-    print_info "Add this to your shell profile: export PATH=\"\$HOME/.local/bin:\$PATH\""
+    fail "win32yank"
   fi
 }
 
-install_clipboard_tools() {
-  if [ "$OS" = "macos" ]; then
-    print_info "macOS has built-in clipboard tools (pbcopy/pbpaste). Skipping installation."
+install_nvim_plugins() {
+  if [ "$SKIP_PLUGINS" = 1 ]; then
+    info "Skipping plugins (--skip-plugins)."
+    return 0
+  fi
+  if [ "$DRY_RUN" = 0 ] && ! command_exists nvim; then
+    fail "Neovim plugins"
     return 0
   fi
 
-  print_info "Installing Linux clipboard tools (wl-clipboard/xclip)..."
-  check_sudo
-  if command_exists apt-get; then
-    sudo apt-get install -y wl-clipboard xclip
-  elif command_exists dnf; then
-    sudo dnf install -y wl-clipboard xclip
-  elif command_exists pacman; then
-    sudo pacman -S --noconfirm wl-clipboard xclip
-  else
-    print_warning "Could not install wl-clipboard or xclip automatically."
-  fi
-  print_success "Clipboard tools installed."
-}
-
-install_fuse() {
-  if [ "$OS" != "linux" ]; then
-    print_info "Not running on Linux. Skipping fuse3 installation."
+  info "Installing plugins at the versions in lazy-lock.json..."
+  if ! run nvim --headless "+Lazy! restore" +qa; then
+    fail "Lazy plugins"
     return 0
   fi
+  record "Lazy plugins" "$([ "$DRY_RUN" = 1 ] && echo 'would restore' || echo 'restored') from lazy-lock.json"
 
-  print_info "Installing fuse3 (for AppImage support)..."
-  check_sudo
-  if command_exists apt-get; then
-    sudo apt-get install -y fuse3
-  elif command_exists dnf; then
-    sudo dnf install -y fuse3
-  elif command_exists pacman; then
-    sudo pacman -S --noconfirm fuse3
+  info "Installing Mason packages (this may take several minutes)..."
+  if run nvim --headless "+MasonToolsInstallSync" +qa; then
+    record "Mason packages" "$([ "$DRY_RUN" = 1 ] && echo 'would install' || echo 'installed')"
   else
-    print_warning "Could not install fuse3 automatically. Please install it manually if you intend to use AppImages."
+    fail "Mason packages"
   fi
-  print_success "Fuse3 installed."
 }
 
-install_nvim_packages() {
-  print_info "Installing Neovim plugins and Mason packages..."
+# --- Main ---------------------------------------------------------------------
 
-  print_info "Syncing Lazy plugins..."
-  if ! nvim --headless "+Lazy! sync" +qa; then
-    print_warning "Lazy plugin sync encountered issues but continuing..."
+print_summary() {
+  echo
+  info "Summary:"
+  local line
+  for line in ${SUMMARY[@]+"${SUMMARY[@]}"}; do
+    printf '  %s\n' "$line"
+  done
+  echo
+  if [ ${#FAILURES[@]} -gt 0 ]; then
+    warn "Failed: ${FAILURES[*]}"
+    return 1
   fi
-
-  print_info "Updating Mason registry..."
-  if ! nvim --headless "+MasonUpdate" +qa; then
-    print_warning "Mason update encountered issues but continuing..."
+  if [ "$DRY_RUN" = 1 ]; then
+    info "Dry run complete; nothing was changed."
+  else
+    ok "Done. Restart your shell so mise-managed tools are on PATH."
   fi
-
-  print_info "Installing Mason packages (this may take several minutes)..."
-  nvim --headless +"lua
-    local pkgs = {
-      'typescript-language-server',
-      'angular-language-server',
-      'jdtls',
-      'java-debug-adapter',
-      'java-test',
-      'eslint_d',
-      'prettierd',
-      'prettier',
-      'stylua',
-    }
-    local mr = require('mason-registry')
-    mr.refresh()
-    local targets = {}
-    for _, name in ipairs(pkgs) do
-      local ok, p = pcall(mr.get_package, name)
-      if ok and not p:is_installed() then
-        table.insert(targets, p)
-      end
-    end
-    if #targets == 0 then
-      print('All Mason packages are already installed.')
-      return
-    end
-    print('Installing ' .. #targets .. ' Mason package(s)...')
-    local done = 0
-    local total = #targets
-    for _, p in ipairs(targets) do
-      p:install():on('closed', function()
-        done = done + 1
-        print(string.format('Progress: %d/%d packages installed', done, total))
-      end)
-    end
-    local result = vim.wait(300000, function() return done == total end, 1000)
-    if not result then
-      print('Warning: Mason package installation timed out after 5 minutes.')
-      print('Some packages may not be fully installed. You can run :MasonInstall manually.')
-    else
-      print('Mason package installation complete.')
-    end
-    " +qa
-  print_success "Neovim setup complete."
 }
 
-# --- Main Execution ---
 main() {
+  [ "$DRY_RUN" = 1 ] && info "Dry run: nothing will be changed."
   detect_os
-  check_sudo
-  print_info "Starting Neovim prerequisites installation for $OS..."
-
   install_system_packages
-  install_node
-  install_python
-  install_python_packages
-  install_npm_packages
-  install_go
-  install_java_sdks
-  install_kotlin_sdk
-  install_kotlin_lsp
-  install_ripgrep_fd
+  install_mise
+  install_tools
   install_nerd_font
-  install_fuse
-  install_neovim
   install_win32yank
-  install_clipboard_tools
-  install_nvim_packages
-
-  print_success "All prerequisites have been installed successfully!"
-  print_info "Please restart your shell or source your shell profile script (e.g., ~/.bashrc, ~/.zshrc) for all changes to take effect."
+  install_nvim_plugins
+  print_summary
 }
 
 main

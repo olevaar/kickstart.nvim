@@ -16,11 +16,11 @@ Grab the latest version of Neovim from the
 
 ### Install External Dependencies
 
-> Note: You can skip installing all of this manually if you run the `install.sh`
-> or `install.cmd` (for Windows) script at the end of this guide. It will
-> install everything you need. However, I have only actually tested this on
-> Ubuntu and Debian. I had Gemini duplicate it for other distros, as well as
-> Windows and MacOS, but those installs are untested.
+> Note: You can skip installing all of this manually if you run `install.sh`
+> (Linux, WSL, macOS) at the end of this guide. It checks every tool first and
+> keeps any existing install that is new enough; only missing or outdated tools
+> are installed, via [mise](https://mise.jdx.dev/). Run `./install.sh --dry-run`
+> to see what it would do. `install.cmd` (Windows) is untested.
 
 External Requirements:
 
@@ -39,12 +39,16 @@ External Requirements:
   - If you want to write Golang, you will need `go`
   - etc.
 
-For the included LSPs, you need: **node ≥ 22** , **npm**, **Java JDK ≥ 21**, **Go ≥ 1.22**
+For the included LSPs, you need: **Neovim ≥ 0.12**, **node ≥ 22** , **npm**,
+**Java JDK ≥ 21**, **Go ≥ 1.22**, and the
+[tree-sitter CLI](https://github.com/tree-sitter/tree-sitter) **≥ 0.26.1**
+(required by nvim-treesitter's `main` branch).
 
-> Note: If [mise](https://mise.jdx.dev/) is available on your system, it will be
-> used automatically to manage Node.js, Java, Python, and Go installations instead
-> of fnm or direct system installs. This provides better version management
-> across projects.
+> Note: `install.sh` uses [mise](https://mise.jdx.dev/) for anything that is
+> missing or too old (Neovim, Node.js, Java, Python, Go, Kotlin, ripgrep, fd,
+> tree-sitter, lazygit, markdownlint, mdformat, ...). The pinned versions are
+> listed at the top of the script. Set `GITHUB_TOKEN` if you hit GitHub API rate
+> limits.
 
 #### Ubuntu / Debian (apt)
 
@@ -120,8 +124,7 @@ Or with Homebrew (macOS):
 brew install mise
 ```
 
-If mise is not available, the configuration will fall back to using `fnm` for
-Node.js and system-installed Java and Python.
+`install.sh` installs mise automatically if it is missing.
 
 <!-- markdownlint-disable MD033 -->
 
@@ -187,19 +190,19 @@ You now have two options to install the plugins and LSP servers.
 
 1. Open Neovim and Lazy will automatically install the plugins for you. You can
    do this by running `nvim` in your terminal. You can also install the LSPs
-   using Mason by typing `:MasonInstallAll` in Neovim.
+   using Mason by typing `:MasonToolsInstall` in Neovim.
    - For Java to work with Lombok, you will need to install the Lombok jar
      manually. Download it from
      [Project Lombok](https://projectlombok.org/download) and place it in the
      JDTLS local directory. Normally this will be located at
      `~/.local/share/nvim/jdtls/`.
-1. Run the install.sh script. This will install all the plugins and set up the
-   LSP servers. If you skipped all the previous steps, this script will also
-   install any dependencies and neovim itself.
+1. Run the install.sh script. This installs the plugins at the versions in
+   `lazy-lock.json` and the Mason packages. If you skipped the previous steps,
+   it also installs any missing dependencies and Neovim itself.
 
 ```sh
-chmod +x install.sh
-./install.sh
+./install.sh --dry-run   # show what would be installed
+./install.sh             # options: --skip-system, --skip-plugins, --extra-jdks
 ```
 
 #### nvim-redraft and Gemini Configuration
