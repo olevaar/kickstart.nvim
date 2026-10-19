@@ -59,7 +59,7 @@ LAZYGIT_MIN=0.40.0 LAZYGIT_MISE="lazygit@0.66"
 MARKDOWNLINT_MISE="npm:markdownlint-cli@0.49"
 GEMINI_MISE="npm:@google/gemini-cli@latest"
 MDFORMAT_MISE="pipx:mdformat@1"
-UV_MISE="uv@latest"
+UV_MIN=0.5.0 UV_MISE="uv@latest"
 MISE_MIN=2025.6.0
 
 export MISE_YES=1
@@ -71,6 +71,8 @@ SUMMARY=()
 FAILURES=()
 TMP_DIR="$(mktemp -d)"
 trap 'rm -rf "$TMP_DIR"' EXIT
+
+CONFIG_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 # Run mise from $HOME so a project-local mise.toml in the current directory
 # cannot influence which versions are detected or installed.
@@ -436,9 +438,10 @@ install_tools() {
   ensure_tool "gemini CLI" 0 "$GEMINI_MISE" gemini --version
 
   if ! check_tool "mdformat" 0 mdformat --version; then
-    if ! command_exists uv && ! command_exists pipx; then
-      ensure_tool "uv" 0 "$UV_MISE" uv --version
-    fi
+    # mise installs Python tools with uv when it is available, else pipx. Old
+    # distro pipx (e.g. 1.4.3 on Ubuntu 24.04) makes mise print a spurious
+    # "pipx failed" error, so always provide uv.
+    ensure_tool "uv" "$UV_MIN" "$UV_MISE" uv --version
     install_tool "mdformat" 0 "$MDFORMAT_MISE" mdformat --version
   fi
 
@@ -456,6 +459,72 @@ install_tools() {
 }
 
 # --- Extras -------------------------------------------------------------------
+
+is_omarchy() {
+  command_exists omarchy || [ -d "$HOME/.local/share/omarchy" ]
+}
+
+# lua/plugins/theme.lua is a symlink into Omarchy's current theme. Elsewhere it
+# dangles, so give it a catppuccin theme at the link's destination.
+install_theme_fallback() {
+  local link="$CONFIG_DIR/lua/plugins/theme.lua" target
+  if is_omarchy; then
+    ok "Omarchy detected; theme is managed by Omarchy"
+    record "Theme" "managed by Omarchy"
+    return 0
+  fi
+  if [ ! -L "$link" ]; then
+    if [ -e "$link" ]; then
+      record "Theme" "existing ($link)"
+    else
+      warn "$link is missing; Neovim will fall back to catppuccin"
+      record "Theme" "missing theme.lua"
+    fi
+    return 0
+  fi
+
+  target=$(readlink "$link")
+  case "$target" in /*) ;; *) target="$(dirname "$link")/$target" ;; esac
+  if [ -e "$target" ]; then
+    target="$(cd "$(dirname "$target")" && pwd -P)/$(basename "$target")"
+    ok "Theme file present at $target"
+    record "Theme" "existing ($target)"
+    return 0
+  fi
+
+  if [ "$DRY_RUN" = 1 ]; then
+    info "Would write a catppuccin theme to $target"
+    record "Theme" "would write catppuccin ($target)"
+    return 0
+  fi
+  if ! mkdir -p "$(dirname "$target")"; then
+    fail "Theme"
+    return 0
+  fi
+  target="$(cd "$(dirname "$target")" && pwd -P)/$(basename "$target")"
+  info "Writing catppuccin theme to $target"
+  if cat >"$target" <<'EOF'; then
+-- Written by install.sh because Omarchy is not installed. Same shape as an
+-- Omarchy theme file; lua/plugins/omarchy-theme-startup.lua applies it.
+return {
+  {
+    'catppuccin/nvim',
+    name = 'catppuccin',
+    priority = 1000,
+  },
+  {
+    'LazyVim/LazyVim',
+    opts = {
+      colorscheme = 'catppuccin',
+    },
+  },
+}
+EOF
+    record "Theme" "wrote catppuccin ($target)"
+  else
+    fail "Theme"
+  fi
+}
 
 install_nerd_font() {
   local font_dir file
@@ -565,6 +634,7 @@ main() {
   install_system_packages
   install_mise
   install_tools
+  install_theme_fallback
   install_nerd_font
   install_win32yank
   install_nvim_plugins
