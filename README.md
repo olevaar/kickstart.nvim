@@ -1,7 +1,5 @@
 # olevaar nvim config (kickstart.nvim fork)
 
-[![CI](https://github.com/olevaar/kickstart.nvim/actions/workflows/ci.yml/badge.svg)](https://github.com/olevaar/kickstart.nvim/actions/workflows/ci.yml)
-
 ## Introduction
 
 This is my Neovim configuration. There are many like it, but this one is mine.
@@ -204,7 +202,7 @@ You now have two options to install the plugins and LSP servers.
 
 `install.sh` exits non-zero if any step failed, including plugin, treesitter
 parser and Mason installs. To check the config itself, run the headless smoke
-test from the repository root (CI runs it on Linux and macOS):
+test from the repository root:
 
 ```sh
 nvim --headless -c 'luafile scripts/smoke.lua'
