@@ -8,6 +8,22 @@ return {
         },
       },
       tools = {
+        opencode = {
+          -- OpenCode Desktop migrates the shared DB to a 2.x schema that the public
+          -- 1.x CLI can't read, so prefer the newest CLI bundled with Desktop.
+          cmd = (function()
+            local newest, newest_version
+            for _, base in ipairs { '~/.config/ai.opencode.desktop', '~/Library/Application Support/ai.opencode.desktop' } do
+              for _, cli in ipairs(vim.fn.glob(vim.fn.expand(base) .. '/cli/*/opencode-cli', false, true)) do
+                local version = vim.version.parse(cli:match '/cli/([^/]+)/opencode%-cli$' or '')
+                if version and vim.fn.executable(cli) == 1 and (not newest_version or newest_version < version) then
+                  newest, newest_version = cli, version
+                end
+              end
+            end
+            return { newest or 'opencode' }
+          end)(),
+        },
         copilot = {
           -- override the default command used to start the tool
           cmd = { 'copilot', '--alt-screen' },
@@ -17,15 +33,11 @@ return {
   },
   keys = {
     {
-      '<tab>',
+      '<leader>an',
       function()
-        -- if there is a next edit, jump to it, otherwise apply it if any
-        if not require('sidekick').nes_jump_or_apply() then
-          return '<Tab>' -- fallback to normal tab
-        end
+        require('sidekick').nes_jump_or_apply()
       end,
-      expr = true,
-      desc = 'Goto/Apply Next Edit Suggestion',
+      desc = 'Goto/Apply [N]ext Edit Suggestion',
     },
     {
       '<leader>aa',

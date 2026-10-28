@@ -28,7 +28,7 @@ return {
         lualine_b = { 'branch', 'diff', 'diagnostics' },
         lualine_c = { { 'filename', path = 1 } },
         lualine_x = {
-          { lsp_clients, icon = '', color = { fg = '#a6e3a1' } },
+          { lsp_clients, icon = '', color = 'DiagnosticOk' },
           'encoding',
           'fileformat',
           'filetype',
@@ -44,7 +44,7 @@ return {
         lualine_y = {},
         lualine_z = {},
       },
-      extensions = { 'nvim-tree', 'fugitive', 'quickfix' },
+      extensions = { 'neo-tree', 'fugitive', 'quickfix' },
     }
   end,
 }

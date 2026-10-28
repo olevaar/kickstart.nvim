@@ -44,10 +44,14 @@ local function warn_missing_cli()
 end
 
 local function attach(buf)
-  if not vim.api.nvim_buf_is_valid(buf) or vim.treesitter.highlighter.active[buf] then
+  if not vim.api.nvim_buf_is_valid(buf) then
     return true
   end
   local lang = vim.treesitter.language.get_lang(vim.bo[buf].filetype)
+  local active = vim.treesitter.highlighter.active[buf]
+  if active and active.tree:lang() == lang then
+    return true
+  end
   if not lang or not vim.treesitter.language.add(lang) then
     return false
   end
@@ -77,14 +81,23 @@ local function missing(langs)
   end, langs)
 end
 
+-- Parsers whose install was attempted this session, so failures are not
+-- retried on every FileType event.
+local attempted = {}
+
 local function install(langs)
-  langs = missing(langs)
+  langs = vim.tbl_filter(function(lang)
+    return not attempted[lang]
+  end, missing(langs))
   if #langs == 0 then
     return
   end
   if not has_cli() then
     warn_missing_cli()
     return
+  end
+  for _, lang in ipairs(langs) do
+    attempted[lang] = true
   end
   require('nvim-treesitter').install(langs):await(vim.schedule_wrap(attach_all))
 end

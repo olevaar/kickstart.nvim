@@ -1,0 +1,62 @@
+name: CI
+
+on:
+  push:
+    branches: [master, main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  lint:
+    name: Lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: stylua
+        uses: JohnnyMorganz/stylua-action@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          version: 2.3.1
+          args: --check .
+      - name: shellcheck
+        run: shellcheck install.sh scripts/*.sh
+
+  install:
+    name: Install (${{ matrix.os }})
+    needs: lint
+    strategy:
+      fail-fast: false
+      matrix:
+        # macos-latest is Apple Silicon; macos-15-intel is the x86_64 image.
+        os: [ubuntu-latest, macos-latest, macos-15-intel]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 60
+    env:
+      # Lets mise resolve versions without hitting GitHub API rate limits.
+      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Link config to ~/.config/nvim
+        run: |
+          mkdir -p ~/.config
+          ln -s "$GITHUB_WORKSPACE" ~/.config/nvim
+
+      - name: Dry run
+        run: ~/.config/nvim/install.sh --dry-run
+
+      - name: Install
+        run: ~/.config/nvim/install.sh
+
+      - name: Smoke test
+        working-directory: ${{ github.workspace }}
+        run: |
+          export PATH="$HOME/.local/bin:$PATH"
+          eval "$(cd ~ && mise env -s bash)"
+          nvim --headless -c 'luafile scripts/smoke.lua'

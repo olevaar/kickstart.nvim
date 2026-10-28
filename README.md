@@ -1,5 +1,7 @@
 # olevaar nvim config (kickstart.nvim fork)
 
+[![CI](https://github.com/olevaar/kickstart.nvim/actions/workflows/ci.yml/badge.svg)](https://github.com/olevaar/kickstart.nvim/actions/workflows/ci.yml)
+
 ## Introduction
 
 This is my Neovim configuration. There are many like it, but this one is mine.
@@ -175,11 +177,10 @@ You now have two options to install the plugins and LSP servers.
 1. Open Neovim and Lazy will automatically install the plugins for you. You can
    do this by running `nvim` in your terminal. You can also install the LSPs
    using Mason by typing `:MasonToolsInstall` in Neovim.
-   - For Java to work with Lombok, you will need to install the Lombok jar
-     manually. Download it from
-     [Project Lombok](https://projectlombok.org/download) and place it in the
-     JDTLS local directory. Normally this will be located at
-     `~/.local/share/nvim/jdtls/`.
+   - Java uses the Lombok jar that ships with Mason's `jdtls` package
+     (`~/.local/share/nvim/mason/packages/jdtls/lombok.jar`); it is picked up
+     automatically when present. Set `JDTLS_DEBUG=1` before starting Neovim to
+     enable verbose jdtls protocol logging.
    - Kotlin uses JetBrains' official
      [Kotlin LSP](https://github.com/Kotlin/kotlin-lsp) (Alpha; partly
      closed-source, distributed under a JetBrains EULA). It is not installed by
@@ -201,57 +202,62 @@ You now have two options to install the plugins and LSP servers.
 ./install.sh             # options: --skip-system, --skip-plugins, --extra-jdks
 ```
 
+`install.sh` exits non-zero if any step failed, including plugin, treesitter
+parser and Mason installs. To check the config itself, run the headless smoke
+test from the repository root (CI runs it on Linux and macOS):
+
+```sh
+nvim --headless -c 'luafile scripts/smoke.lua'
+```
+
+#### Theme
+
+`lua/plugins/theme.lua` uses Omarchy's current theme
+(`~/.local/state/omarchy/current/theme/neovim.lua`) when it exists, and
+catppuccin otherwise. Omarchy theme changes are applied live.
+
+#### Keymaps that differ from kickstart
+
+- `<leader>e`: show the diagnostic under the cursor in a float.
+- `<leader>cf`: format the buffer (`<leader>f…` is the Telescope find group).
+- `<Tab>` / `<S-Tab>` (normal mode): next / previous buffer.
+- `<Esc><Esc>` (terminal mode): leave terminal mode. `<C-h/j/k/l>` are passed
+  through to the program running in the terminal.
+- `:JavaLaunchMainWithJDK {11|17|21} <MainClass>` finds JDKs installed by mise
+  (`install.sh --extra-jdks`), `/usr/libexec/java_home` on macOS, or
+  `/usr/lib/jvm`.
+
 #### nvim-redraft and Gemini Configuration
 
 I have also included `nvim-redraft` for fast, inline AI-powered code editing. It is configured to support multiple providers:
-- **Gemini 2.5 Flash** (via OpenAI-compatible endpoint)
-- **GitHub Copilot** (GPT-4o)
+- **Gemini 3.1 Pro** (via Gemini's OpenAI-compatible endpoint)
+- **GitHub Copilot** (GPT 5.2)
 
 **Keybindings:**
 - `<leader>ae` (Visual mode): AI Edit Selection. Select code, press this, and enter an instruction.
 - `<leader>am` (Normal mode): Select AI Model. This allows you to switch between Gemini and Copilot.
 
-**Important:** Because `nvim-redraft` is configured to use the OpenAI compatible endpoint for Gemini, you **must** export your Gemini API key as the `OPENAI_API_KEY` environment variable in your shell for the Gemini provider to work:
+**Important:** redraft has no native Gemini provider, so its OpenAI provider is
+pointed at Gemini's OpenAI-compatible endpoint. You **must** export your Gemini
+API key as `OPENAI_API_KEY` in your shell for the Gemini provider to work:
 
 ```sh
 export OPENAI_API_KEY="your-gemini-api-key"
 ```
 
-##### Patching the TypeScript Backend
+Other tools that read `OPENAI_API_KEY` will then send your Gemini key to
+OpenAI. If you use such tools, set the variable only for Neovim, e.g.
+`alias nvim='OPENAI_API_KEY="$GEMINI_API_KEY" nvim'`.
 
-Because `nvim-redraft` uses the Vercel AI SDK, it currently does not pass the custom `baseURL` correctly to the underlying provider, and the default fallback routing fails when hitting the Gemini endpoint. To fix this, you must apply a patch to the locally installed TypeScript source. If the plugin updates, you may need to re-apply this patch.
+##### Patched TypeScript backend
 
-Run the following script to patch the file and rebuild the service:
-
-```bash
-cat << 'EOF' > patch_redraft.sh
-#!/bin/bash
-LLM_TS=~/.local/share/nvim/lazy/nvim-redraft/ts/src/llm.ts
-
-if [ -f "$LLM_TS" ]; then
-  # 1. Add baseURL to BaseLLMProvider constructor
-  sed -i 's/protected maxOutputTokens: number;/protected maxOutputTokens: number;\n  protected baseURL?: string;/g' $LLM_TS
-  sed -i 's/constructor(apiKey: string, model: string, maxOutputTokens?: number) {/constructor(apiKey: string, model: string, maxOutputTokens?: number, baseURL?: string) {/g' $LLM_TS
-  sed -i 's/this.maxOutputTokens = maxOutputTokens || 4096;/this.maxOutputTokens = maxOutputTokens || 4096;\n    this.baseURL = baseURL;/g' $LLM_TS
-  
-  # 2. Update OpenAIProvider to use baseURL
-  sed -i 's/return createOpenAI({ apiKey: this.apiKey });/return createOpenAI({ apiKey: this.apiKey, baseURL: this.baseURL });/g' $LLM_TS
-
-  # 3. Update PROVIDERS registry mapping to pass baseURL to the constructor
-  sed -i 's/new OpenAIProvider(apiKey, model, maxOutputTokens)/new OpenAIProvider(apiKey, model, maxOutputTokens, baseURL)/g' $LLM_TS
-
-  # 4. Force the AI SDK to use the .chat endpoint
-  sed -i "s/model: provider(this.model),/model: typeof provider.chat === 'function' ? provider.chat(this.model) : provider(this.model),/g" $LLM_TS
-
-  echo "Patched $LLM_TS"
-  cd ~/.local/share/nvim/lazy/nvim-redraft/ts && npm install && npm run build
-else
-  echo "File not found: $LLM_TS"
-fi
-EOF
-chmod +x patch_redraft.sh && ./patch_redraft.sh
-rm patch_redraft.sh
-```
+The plugin's TypeScript backend does not pass the custom `baseURL` to the
+OpenAI provider and uses an API route Gemini does not serve. The `build` step in
+`lua/plugins/redraft.lua` patches `ts/src/llm.ts` and rebuilds it. Lazy runs
+`build` after every install, update and `Lazy restore`, so the patch is
+reapplied automatically. If upstream changes the patched code, the build fails
+with "patch target not found" and the patch list needs updating. To reapply it
+by hand, run `:Lazy build nvim-redraft`.
 
 #### sidekick.nvim and Github Copilot configuration
 
@@ -266,7 +272,9 @@ using Copilot as the backend for your AI tasks.
 
 Sidekick.nvim is configured with several helpful keybindings:
 
-- `<tab>`: Jump to or apply the next edit suggestion.
+- `<Tab>` (insert mode): jump to or apply the next edit suggestion when the
+  completion menu is closed.
+- `<leader>an`: Jump to or apply the next edit suggestion (normal mode).
 - `<leader>aa`: Toggle the Sidekick CLI.
 - `<leader>as`: Select a CLI tool.
 - `<leader>ad`: Detach a CLI session.

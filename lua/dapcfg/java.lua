@@ -91,14 +91,40 @@ local function java_default_configs()
   return configs
 end
 
+local function jdk_home(path)
+  if path and path ~= '' and vim.fn.executable(path .. '/bin/java') == 1 then
+    return path
+  end
+end
+
+local function command_output(cmd)
+  if vim.fn.executable(cmd[1]) == 0 then
+    return nil
+  end
+  local res = vim.system(cmd, { text = true }):wait()
+  return res.code == 0 and vim.trim(res.stdout or '') or nil
+end
+
+-- Looks for a JDK of the given major version installed by mise (as
+-- `install.sh --extra-jdks` does), registered with macOS, or under /usr/lib/jvm.
 local function find_jdk(version)
-  local candidates = vim.fn.glob('/usr/lib/jvm/*', true, true)
-  for _, path in ipairs(candidates) do
-    if path:match(tostring(version)) then
-      local binjava = path .. '/bin/java'
-      if vim.fn.filereadable(binjava) == 1 then
-        return path
-      end
+  local v = tostring(version)
+  for _, spec in ipairs { 'java@temurin-' .. v, 'java@' .. v } do
+    local home = jdk_home(command_output { 'mise', 'where', spec })
+    if home then
+      return home
+    end
+  end
+  if vim.fn.has 'mac' == 1 then
+    local home = jdk_home(command_output { '/usr/libexec/java_home', '-v', v })
+    if home then
+      return home
+    end
+  end
+  for _, path in ipairs(vim.fn.glob('/usr/lib/jvm/*', true, true)) do
+    local name = vim.fs.basename(path)
+    if (name:match('%-' .. v .. '%-') or name:match('%-' .. v .. '$') or name:match('%-' .. v .. '%.')) and jdk_home(path) then
+      return path
     end
   end
   return nil
@@ -145,7 +171,7 @@ vim.api.nvim_create_user_command('JavaLaunchMainWithJDK', function(opts)
   local projectName = vim.fn.fnamemodify(cwd, ':t')
   local jdk = find_jdk(version)
   if not jdk then
-    vim.notify('JDK ' .. version .. ' not found under /usr/lib/jvm', vim.log.levels.ERROR)
+    vim.notify('JDK ' .. version .. ' not found (checked mise, java_home, /usr/lib/jvm)', vim.log.levels.ERROR)
     return
   end
   local env = vim.tbl_extend('force', vim.fn.environ(), {

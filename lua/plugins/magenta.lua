@@ -6,7 +6,7 @@ return {
   opts = {
     profiles = {
       -- If you want a list of the models available for your copilot account,
-      -- you can run the script under scripts/get_copilot_models.sh
+      -- you can run scripts/get_github_models.sh
       -- This will curl the copilot API and list the models you have access to.
       -- The token is read from ~/.config/github-copilot/apps.json, so you
       -- need to be authenticated with the copilot plugin first.

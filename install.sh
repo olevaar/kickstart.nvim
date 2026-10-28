@@ -57,9 +57,9 @@ FD_MIN=8.0.0 FD_MISE="fd@10"
 TS_MIN=0.26.1 TS_MISE="tree-sitter@0.27"
 LAZYGIT_MIN=0.40.0 LAZYGIT_MISE="lazygit@0.66"
 MARKDOWNLINT_MISE="npm:markdownlint-cli@0.49"
-GEMINI_MISE="npm:@google/gemini-cli@latest"
+GEMINI_MISE="npm:@google/gemini-cli@0.65"
 MDFORMAT_MISE="pipx:mdformat@1"
-UV_MIN=0.5.0 UV_MISE="uv@latest"
+UV_MIN=0.5.0 UV_MISE="uv@0.13"
 MISE_MIN=2025.6.0
 
 export MISE_YES=1
@@ -71,8 +71,6 @@ SUMMARY=()
 FAILURES=()
 TMP_DIR="$(mktemp -d)"
 trap 'rm -rf "$TMP_DIR"' EXIT
-
-CONFIG_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 # Run mise from $HOME so a project-local mise.toml in the current directory
 # cannot influence which versions are detected or installed.
@@ -309,7 +307,10 @@ install_system_packages() {
     as_root apt-get install -y "${packages[@]}"
     ;;
   dnf) as_root dnf install -y "${packages[@]}" ;;
-  pacman) as_root pacman -S --needed --noconfirm "${packages[@]}" ;;
+  pacman)
+    as_root pacman -S --needed --noconfirm "${packages[@]}" ||
+      die "pacman failed. If packages were not found, update the system first (sudo pacman -Syu) and re-run."
+    ;;
   zypper) as_root zypper --non-interactive install "${packages[@]}" ;;
   esac
   record "OS packages" "installed ${packages[*]}"
@@ -339,7 +340,7 @@ install_mise() {
     if [ "$DRY_RUN" = 0 ] && ! command_exists mise; then
       die "mise installation failed. See https://mise.jdx.dev/getting-started.html"
     fi
-    record "mise" "installed"
+    record "mise" "$([ "$DRY_RUN" = 1 ] && echo 'would install' || echo 'installed')"
   fi
 
   setup_mise_activation
@@ -410,8 +411,10 @@ install_tools() {
   ensure_tool "Neovim" "$NVIM_MIN" "$NVIM_MISE" nvim --version
 
   ensure_tool "Node.js" "$NODE_MIN" "$NODE_MISE" node --version
-  if ! check_tool "npm" 0 npm --version; then
-    install_tool "Node.js (for npm)" "$NODE_MIN" "$NODE_MISE" node --version
+  if [ "$DRY_RUN" = 0 ] || command_exists node; then
+    if ! check_tool "npm" 0 npm --version; then
+      install_tool "Node.js (for npm)" "$NODE_MIN" "$NODE_MISE" node --version
+    fi
   fi
 
   ensure_tool "Python" "$PYTHON_MIN" "$PYTHON_MISE" python3 --version
@@ -460,72 +463,6 @@ install_tools() {
 
 # --- Extras -------------------------------------------------------------------
 
-is_omarchy() {
-  command_exists omarchy || [ -d "$HOME/.local/share/omarchy" ]
-}
-
-# lua/plugins/theme.lua is a symlink into Omarchy's current theme. Elsewhere it
-# dangles, so give it a catppuccin theme at the link's destination.
-install_theme_fallback() {
-  local link="$CONFIG_DIR/lua/plugins/theme.lua" target
-  if is_omarchy; then
-    ok "Omarchy detected; theme is managed by Omarchy"
-    record "Theme" "managed by Omarchy"
-    return 0
-  fi
-  if [ ! -L "$link" ]; then
-    if [ -e "$link" ]; then
-      record "Theme" "existing ($link)"
-    else
-      warn "$link is missing; Neovim will fall back to catppuccin"
-      record "Theme" "missing theme.lua"
-    fi
-    return 0
-  fi
-
-  target=$(readlink "$link")
-  case "$target" in /*) ;; *) target="$(dirname "$link")/$target" ;; esac
-  if [ -e "$target" ]; then
-    target="$(cd "$(dirname "$target")" && pwd -P)/$(basename "$target")"
-    ok "Theme file present at $target"
-    record "Theme" "existing ($target)"
-    return 0
-  fi
-
-  if [ "$DRY_RUN" = 1 ]; then
-    info "Would write a catppuccin theme to $target"
-    record "Theme" "would write catppuccin ($target)"
-    return 0
-  fi
-  if ! mkdir -p "$(dirname "$target")"; then
-    fail "Theme"
-    return 0
-  fi
-  target="$(cd "$(dirname "$target")" && pwd -P)/$(basename "$target")"
-  info "Writing catppuccin theme to $target"
-  if cat >"$target" <<'EOF'; then
--- Written by install.sh because Omarchy is not installed. Same shape as an
--- Omarchy theme file; lua/plugins/omarchy-theme-startup.lua applies it.
-return {
-  {
-    'catppuccin/nvim',
-    name = 'catppuccin',
-    priority = 1000,
-  },
-  {
-    'LazyVim/LazyVim',
-    opts = {
-      colorscheme = 'catppuccin',
-    },
-  },
-}
-EOF
-    record "Theme" "wrote catppuccin ($target)"
-  else
-    fail "Theme"
-  fi
-}
-
 install_nerd_font() {
   local font_dir file
   if [ "$IS_WSL" = 1 ]; then
@@ -550,7 +487,11 @@ install_nerd_font() {
     run mkdir -p "$font_dir" &&
     run unzip -o -q "$zip" '*.ttf' -d "$font_dir"; then
     if [ "$OS" = linux ] && command_exists fc-cache; then run fc-cache -f "$font_dir"; fi
-    record "Nerd Font" "installed (set your terminal font to 'UbuntuMono Nerd Font')"
+    if [ "$DRY_RUN" = 1 ]; then
+      record "Nerd Font" "would install"
+    else
+      record "Nerd Font" "installed (set your terminal font to 'UbuntuMono Nerd Font')"
+    fi
   else
     fail "Nerd Font"
   fi
@@ -575,6 +516,11 @@ install_win32yank() {
   fi
 }
 
+# Runs a Lua expression in headless Neovim and fails if it raises an error.
+nvim_lua() {
+  run nvim --headless -c "lua local ok, err = pcall(function() $1 end); if not ok then io.stderr:write(tostring(err) .. '\n'); vim.cmd('cquit 1') end" -c qa
+}
+
 install_nvim_plugins() {
   if [ "$SKIP_PLUGINS" = 1 ]; then
     info "Skipping plugins (--skip-plugins)."
@@ -586,21 +532,21 @@ install_nvim_plugins() {
   fi
 
   info "Installing plugins at the versions in lazy-lock.json..."
-  if ! run nvim --headless "+Lazy! restore" +qa; then
+  if ! run nvim --headless "+Lazy! restore" +qa || ! nvim_lua "require('configs.bootstrap').verify_plugins()"; then
     fail "Lazy plugins"
     return 0
   fi
   record "Lazy plugins" "$([ "$DRY_RUN" = 1 ] && echo 'would restore' || echo 'restored') from lazy-lock.json"
 
   info "Installing treesitter parsers..."
-  if run nvim --headless -c "lua local ok, err = pcall(require('configs.treesitter').install_sync); if not ok then io.stderr:write(tostring(err) .. '\n'); vim.cmd('cquit 1') end" -c qa; then
+  if nvim_lua "require('configs.treesitter').install_sync()"; then
     record "Treesitter parsers" "$([ "$DRY_RUN" = 1 ] && echo 'would install' || echo 'installed')"
   else
     fail "Treesitter parsers"
   fi
 
   info "Installing Mason packages (this may take several minutes)..."
-  if run nvim --headless "+MasonToolsInstallSync" +qa; then
+  if nvim_lua "require('configs.bootstrap').install_mason_sync()"; then
     record "Mason packages" "$([ "$DRY_RUN" = 1 ] && echo 'would install' || echo 'installed')"
   else
     fail "Mason packages"
@@ -634,7 +580,6 @@ main() {
   install_system_packages
   install_mise
   install_tools
-  install_theme_fallback
   install_nerd_font
   install_win32yank
   install_nvim_plugins

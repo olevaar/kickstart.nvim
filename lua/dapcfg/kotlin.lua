@@ -18,9 +18,12 @@ end
 -- Runs a server command from inside a coroutine and returns its result.
 local function exec(client, command, arguments)
   local co = coroutine.running()
-  client:request('workspace/executeCommand', { command = command, arguments = arguments }, function(err, result)
+  local sent = client:request('workspace/executeCommand', { command = command, arguments = arguments }, function(err, result)
     coroutine.resume(co, err, result)
   end)
+  if not sent then
+    error(command .. ': the language server is not running', 0)
+  end
   local err, result = coroutine.yield()
   if err then
     error(command .. ': ' .. (err.message or vim.inspect(err)), 0)
@@ -152,7 +155,7 @@ local function main_classes(bufnr)
   local res = client:request_sync('textDocument/codeLens', { textDocument = { uri = vim.uri_from_bufnr(bufnr) } }, 10000, bufnr)
   local seen, classes = {}, {}
   for _, lens in ipairs(res and res.result or {}) do
-    local arg = lens.command and lens.command.command == 'intellij.jvm.runMain' and lens.command.arguments[1]
+    local arg = lens.command and lens.command.command == 'intellij.jvm.runMain' and (lens.command.arguments or {})[1]
     if arg and not seen[arg.mainClass] then
       seen[arg.mainClass] = true
       table.insert(classes, arg.mainClass)
@@ -203,7 +206,10 @@ end
 
 -- Handles the server's Run/Debug code lens (`grx`, or `vim.lsp.codelens.run()`).
 local function run_main(command)
-  local arg = command.arguments[1]
+  local arg = (command.arguments or {})[1]
+  if not arg or not arg.mainClass then
+    return notify('the code lens has no main class', vim.log.levels.ERROR)
+  end
   local client = kotlin_client()
   coroutine.wrap(function()
     local tool

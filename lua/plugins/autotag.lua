@@ -1,6 +1,6 @@
 return {
   'windwp/nvim-ts-autotag',
-  ft = { 'html', 'xml', 'javascript', 'typescript', 'javascriptreact', 'typescriptreact', 'svelte', 'vue', 'tsx', 'jsx', 'markdown', 'astro', 'php', 'eruby', 'htmldjango' },
+  ft = { 'html', 'xml', 'javascript', 'typescript', 'javascriptreact', 'typescriptreact', 'svelte', 'vue', 'markdown', 'astro', 'php', 'eruby', 'htmldjango' },
   config = function()
     require('nvim-ts-autotag').setup {
       opts = {

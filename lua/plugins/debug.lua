@@ -105,7 +105,7 @@ return {
       },
     }
 
-    pcall(require, 'debug.java')
-    require('debug.kotlin').setup_dap(dap)
+    pcall(require, 'dapcfg.java')
+    require('dapcfg.kotlin').setup_dap(dap)
   end,
 }

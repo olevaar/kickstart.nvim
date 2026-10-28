@@ -15,19 +15,11 @@ vim.api.nvim_create_autocmd('LspAttach', {
     map('gO', require('telescope.builtin').lsp_document_symbols, 'Open Document Symbols')
     map('gW', require('telescope.builtin').lsp_dynamic_workspace_symbols, 'Open Workspace Symbols')
     map('grt', require('telescope.builtin').lsp_type_definitions, '[G]oto [T]ype Definition')
-    map('of', vim.diagnostic.open_float, '[O]pen Diagnostic [F]loat')
-
-    local function client_supports(client, method, bufnr)
-      if vim.fn.has 'nvim-0.11' == 1 then
-        return client:supports_method(method, bufnr)
-      else
-        return client.supports_method(method, { bufnr = bufnr })
-      end
-    end
+    map('<leader>e', vim.diagnostic.open_float, 'Show diagnostic [E]rror float')
 
     local client = vim.lsp.get_client_by_id(event.data.client_id)
 
-    if client and client_supports(client, vim.lsp.protocol.Methods.textDocument_documentHighlight, event.buf) then
+    if client and client:supports_method(vim.lsp.protocol.Methods.textDocument_documentHighlight, event.buf) then
       local highlight_augroup = vim.api.nvim_create_augroup('kickstart-lsp-highlight', { clear = false })
       vim.api.nvim_create_autocmd({ 'CursorHold', 'CursorHoldI' }, {
         buffer = event.buf,
@@ -50,7 +42,7 @@ vim.api.nvim_create_autocmd('LspAttach', {
       })
     end
 
-    if client and client_supports(client, vim.lsp.protocol.Methods.textDocument_inlayHint, event.buf) then
+    if client and client:supports_method(vim.lsp.protocol.Methods.textDocument_inlayHint, event.buf) then
       map('<leader>th', function()
         vim.lsp.inlay_hint.enable(not vim.lsp.inlay_hint.is_enabled { bufnr = event.buf })
       end, '[T]oggle Inlay [H]ints')
@@ -72,20 +64,10 @@ vim.diagnostic.config {
   } or {},
   virtual_text = {
     source = 'if_many',
-    spacing = 2,
-    format = function(diagnostic)
-      local diagnostic_message = {
-        [vim.diagnostic.severity.ERROR] = diagnostic.message,
-        [vim.diagnostic.severity.WARN] = diagnostic.message,
-        [vim.diagnostic.severity.INFO] = diagnostic.message,
-        [vim.diagnostic.severity.HINT] = diagnostic.message,
-      }
-      return diagnostic_message[diagnostic.severity]
-    end,
+    spacing = 4,
   },
 }
 
--- local capabilities = require('blink.cmp').get_lsp_capabilities()
 local capabilities = require('cmp_nvim_lsp').default_capabilities()
 local servers = {
   lua_ls = {
@@ -99,34 +81,22 @@ local servers = {
   },
 }
 
-local ensure_installed = vim.tbl_keys(servers or {})
-vim.list_extend(ensure_installed, {
-  'stylua',
-  'cssls',
-  'html',
-  'ts_ls',
-  'angularls',
-  'eslint-lsp',
-  'ktlint',
-  'shfmt',
-  'jdtls',
-  'java-debug-adapter',
-  'java-test',
-  'prettier',
-  'gopls',
-})
-require('mason-tool-installer').setup { ensure_installed = ensure_installed }
+vim.lsp.config('*', { capabilities = capabilities })
+for name, server in pairs(servers) do
+  vim.lsp.config(name, server)
+end
+
+require('mason-tool-installer').setup {
+  ensure_installed = require 'configs.mason_packages',
+  -- Headless runs (install.sh) install synchronously via MasonToolsInstallSync;
+  -- a background install on start would race the `+qa` that follows.
+  run_on_start = #vim.api.nvim_list_uis() > 0,
+}
 
 require('mason-lspconfig').setup {
   ensure_installed = {},
-  automatic_installation = false,
-  handlers = {
-    function(server_name)
-      local server = servers[server_name] or {}
-      server.capabilities = vim.tbl_deep_extend('force', {}, capabilities, server.capabilities or {})
-      vim.lsp.config(server_name, server)
-    end,
-  },
+  -- nvim-jdtls starts jdtls from ftplugin/java.lua.
+  automatic_enable = { exclude = { 'jdtls' } },
 }
 
 -- JetBrains' official Kotlin server. Installed by install.sh via mise rather
@@ -136,9 +106,8 @@ for _, kotlin_cmd in ipairs { 'intellij-server', 'kotlin-lsp' } do
   if vim.fn.executable(kotlin_cmd) == 1 then
     vim.lsp.config(
       'kotlin_lsp',
-      vim.tbl_extend('force', require('debug.kotlin').lsp_config(), {
+      vim.tbl_extend('force', require('dapcfg.kotlin').lsp_config(), {
         cmd = { kotlin_cmd, '--stdio' },
-        capabilities = capabilities,
         workspace_required = true,
       })
     )
@@ -154,7 +123,6 @@ vim.lsp.config('eslint', {
     vim.fn.stdpath 'data' .. '/mason/packages/eslint-lsp/node_modules/vscode-langservers-extracted/bin/vscode-eslint-language-server',
     '--stdio',
   },
-  capabilities = capabilities,
   settings = {
     workingDirectories = { { mode = 'auto' } },
     format = { enable = true },
